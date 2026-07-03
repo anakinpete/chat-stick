@@ -314,8 +314,10 @@ export class LiveSession {
 	private currentTurnAudioBytes = 0
 	private currentTurnAbsSum = 0
 	private currentTurnSamples = 0
+	private deviceRecording = false
 	private queuedAudioChunks: ArrayBuffer[] = []
 	private queuedAudioBytes = 0
+	private queuedTextInputs: string[] = []
 	private pendingStopAfterGeminiReady = false
 	private pendingActivityStartAfterGeminiReady = false
 	private activityOpen = false
@@ -1131,10 +1133,41 @@ export class LiveSession {
 		return true
 	}
 
+	private sendTextInputToGemini(text: string): boolean {
+		if (!this.geminiWs || !this.geminiReady) {
+			return false
+		}
+		this.geminiWs.send(
+			JSON.stringify({
+				clientContent: {
+					turns: [
+						{
+							role: 'user',
+							parts: [{ text }],
+						},
+					],
+					turnComplete: true,
+				},
+			}),
+		)
+		return true
+	}
+
+	private flushQueuedTextToGemini() {
+		if (!this.geminiWs || !this.geminiReady || this.queuedTextInputs.length === 0) {
+			return
+		}
+		const texts = this.queuedTextInputs
+		this.queuedTextInputs = []
+		for (const text of texts) {
+			this.sendTextInputToGemini(text)
+		}
+	}
+
 	private handleStopSignal() {
 		const ignoreReason = this.getIgnoredTurnReason()
 		if (ignoreReason) {
-			console.log(`[Bridge] Ignoring accidental clip (${ignoreReason})`)
+			console.log(`[Bridge] Ignoring accidental clip (${ignoreReason}; ${this.describeCurrentTurn()})`)
 			this.currentUserText = ''
 			this.currentAssistantText = ''
 			this.sendToDevice({ type: 'ignore_audio', reason: ignoreReason })
@@ -1152,6 +1185,10 @@ export class LiveSession {
 	private onDeviceMessage(data: string | ArrayBuffer) {
 		this.lastActivityMs = Date.now()
 		if (data instanceof ArrayBuffer) {
+			if (!this.deviceRecording) {
+				console.warn(`[Bridge] Ignoring late audio chunk after stop (${data.byteLength} bytes)`)
+				return
+			}
 			this.trackIncomingAudio(data)
 			if (!this.geminiWs || !this.geminiReady) {
 				this.queueAudioChunk(data)
@@ -1166,6 +1203,7 @@ export class LiveSession {
 				console.log('[Device]', msg.type)
 
 				if (msg.type === 'start') {
+					this.deviceRecording = true
 					this.resetCurrentTurnMetrics()
 					this.queuedAudioChunks = []
 					this.queuedAudioBytes = 0
@@ -1210,17 +1248,19 @@ export class LiveSession {
 				}
 
 				// Forward text input to Gemini
-				if (msg.type === 'text' && msg.content && this.geminiWs && this.geminiReady) {
-					this.sendActivityStartToGemini()
-					this.geminiWs.send(
-						JSON.stringify({
-							realtimeInput: { text: msg.content },
-						}),
-					)
-					this.sendActivityEndToGemini()
+				if (msg.type === 'text' && typeof msg.content === 'string' && msg.content.trim()) {
+					const text = msg.content.trim()
+					this.currentUserText += this.currentUserText ? ` ${text}` : text
+					this.ensureGeminiSession()
+					if (!this.geminiWs || !this.geminiReady) {
+						this.queuedTextInputs.push(text)
+						return
+					}
+					this.sendTextInputToGemini(text)
 				}
 
 				if (msg.type === 'stop') {
+					this.deviceRecording = false
 					if (!this.geminiWs || !this.geminiReady) {
 						this.pendingStopAfterGeminiReady = true
 						this.ensureGeminiSession()
@@ -1284,6 +1324,7 @@ export class LiveSession {
 			}
 			this.sendToDevice({ type: 'ready' })
 			this.flushQueuedAudioToGemini()
+			this.flushQueuedTextToGemini()
 			if (this.pendingStopAfterGeminiReady) {
 				this.pendingStopAfterGeminiReady = false
 				this.handleStopSignal()
@@ -2197,8 +2238,19 @@ export class LiveSession {
 			return 'too_short'
 		}
 
+		// Sidephone microphone samples can be quiet even when speech is present.
+		// Let Gemini handle unclear audio instead of dropping plausible turns here.
 		const averageAbs = this.currentTurnAbsSum / this.currentTurnSamples
-		return averageAbs < LiveSession.SILENCE_AVG_ABS_THRESHOLD ? 'silent' : null
+		if (averageAbs < LiveSession.SILENCE_AVG_ABS_THRESHOLD) {
+			console.log(`[Bridge] Accepting quiet turn (${this.describeCurrentTurn()})`)
+		}
+		return null
+	}
+
+	private describeCurrentTurn() {
+		const averageAbs =
+			this.currentTurnSamples > 0 ? this.currentTurnAbsSum / this.currentTurnSamples : 0
+		return `bytes=${this.currentTurnAudioBytes} samples=${this.currentTurnSamples} avgAbs=${averageAbs.toFixed(1)}`
 	}
 
 	private resetCurrentTurnMetrics() {
@@ -2265,8 +2317,10 @@ export class LiveSession {
 			}).catch(() => {})
 		}
 		this.pendingDeviceCalls.clear()
+		this.deviceRecording = false
 		this.queuedAudioChunks = []
 		this.queuedAudioBytes = 0
+		this.queuedTextInputs = []
 		this.pendingStopAfterGeminiReady = false
 		this.pendingActivityStartAfterGeminiReady = false
 		this.pendingReconnectAfterTurn = false

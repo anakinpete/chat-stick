@@ -14,6 +14,13 @@ server/*.sqlite-*
 
 # Node
 node_modules/
+.pnp.cjs
+.pnp.loader.mjs
+.yarn/
+
+# Android
+apps/sidephone-chat-stick/build/
+apps/sidephone-chat-stick/.debug.keystore
 
 # OS
 .DS_Store
