@@ -207,6 +207,7 @@ void AppController::setup() {
       return;
     }
     appendToolTextReveal(delta);
+    serviceUi();
   };
   callbacks.onError = [this](const String &category, const String &error) {
     const ErrorCategory mapped = category == "gemini_unavailable"
@@ -235,6 +236,11 @@ void AppController::setup() {
       _audio.queuePlayback(data, len);
       _turn.noteAudioReceived();
     }
+    // Audio frames arrive back-to-back inside a single websocket poll, so the
+    // main loop can be stalled here for the whole turn. Keep the reveal and
+    // the screen moving from inside the burst.
+    processPlayback();
+    serviceUi();
   };
   callbacks.onBrightness = [this](int level) {
     _display.setBrightness(level);
@@ -627,7 +633,6 @@ void AppController::appendToolTextReveal(const String &text) {
   }
   _toolTextRevealTarget += text;
   rebuildToolTextRevealLayout();
-  resetBodyPage();
   _screenDirty = true;
 }
 
@@ -636,7 +641,6 @@ void AppController::rebuildToolTextRevealLayout() {
   const int targetLen = static_cast<int>(_toolTextRevealLayout.length());
   _toolTextRevealIndex = constrain(_toolTextRevealIndex, 0, targetLen);
   _toolText = _toolTextRevealLayout.substring(0, _toolTextRevealIndex);
-  _lastTextRevealMs = 0;
 }
 
 void AppController::completeToolTextReveal() {
@@ -1656,15 +1660,28 @@ void AppController::processTextReveal() {
   }
 
   const unsigned long now = millis();
-  if (_lastTextRevealMs != 0 &&
-      now - _lastTextRevealMs < kTextRevealFrameMs) {
+  if (_lastTextRevealMs == 0) {
+    _lastTextRevealMs = now;
+  }
+  const unsigned long elapsed = now - _lastTextRevealMs;
+  if (elapsed < kTextRevealFrameMs) {
     return;
   }
 
-  _lastTextRevealMs = now;
-  _toolTextRevealIndex++;
+  // Reveal by elapsed time rather than one character per call. The main loop
+  // stalls for long stretches while a response streams in, and a per-call step
+  // would make the reveal crawl at the loop rate instead of the frame rate.
+  const int steps = static_cast<int>(elapsed / kTextRevealFrameMs);
+  _lastTextRevealMs += static_cast<unsigned long>(steps) * kTextRevealFrameMs;
+
+  _toolTextRevealIndex = min(targetLen, _toolTextRevealIndex + steps);
   _toolText = _toolTextRevealLayout.substring(0, _toolTextRevealIndex);
   _screenDirty = true;
+}
+
+void AppController::serviceUi() {
+  processTextReveal();
+  renderIfNeeded();
 }
 
 void AppController::processWaitingIndicator() {
@@ -1782,6 +1799,12 @@ DisplayState AppController::buildDisplayState() const {
   state.bodyText = buildBodyText();
   state.bodyDim = _appState == AppState::Recording ||
                   _appState == AppState::Thinking;
+  // While a reveal is still running, the newest characters ramp up through a
+  // few brightness steps so streamed text fades in rather than popping.
+  const bool revealing =
+      !_bootMode && !_toolText.isEmpty() &&
+      _toolTextRevealIndex < static_cast<int>(_toolTextRevealLayout.length());
+  state.bodyFadeChars = revealing ? kTextRevealFadeChars : 0;
   state.imagePresent = _imagePresent;
   state.pageIndex = _bodyPageIndex;
   state.pageCount = currentBodyPageCount();

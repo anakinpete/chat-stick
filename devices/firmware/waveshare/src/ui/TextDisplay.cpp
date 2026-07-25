@@ -105,11 +105,36 @@ void TextDisplay::render(const DisplayState &state) {
     if (imagePage && safePageIndex == 0) {
       drawStoredImage();
     } else {
+      // Streamed text fades in: the newest characters are drawn dim and step up
+      // to the body color as more arrive behind them. Ages are counted in
+      // rendered characters, so the ramp is measured against the wrapped rows
+      // rather than the raw source text.
+      const int fadeChars = state.bodyDim ? 0 : max(0, state.bodyFadeChars);
+      int totalChars = 0;
+      if (fadeChars > 0) {
+        for (int i = 0; i < wrappedCount; i++) {
+          totalChars += static_cast<int>(wrapped[i].length());
+        }
+      }
+
       const int textPageIndex = imagePage ? safePageIndex - 1 : safePageIndex;
+      const int firstLineIndex = textPageIndex * kChatRows;
+      int rowStartChar = 0;
+      for (int i = 0; i < min(firstLineIndex, wrappedCount); i++) {
+        rowStartChar += static_cast<int>(wrapped[i].length());
+      }
+
       for (int i = 0; i < kChatRows; i++) {
-        const int lineIndex = textPageIndex * kChatRows + i;
+        const int lineIndex = firstLineIndex + i;
         const String line = lineIndex < wrappedCount ? wrapped[lineIndex] : "";
-        drawLine(i, line, bodyColor);
+        const int lineLen = static_cast<int>(line.length());
+        if (fadeChars > 0 && rowStartChar + lineLen > totalChars - fadeChars) {
+          drawFadingLine(i, line, bodyColor, totalChars - rowStartChar,
+                         fadeChars);
+        } else {
+          drawLine(i, line, bodyColor);
+        }
+        rowStartChar += lineLen;
       }
     }
 
@@ -179,9 +204,23 @@ void TextDisplay::clearFrame(uint16_t color) const {
     return;
   }
 
-  const size_t pixels = static_cast<size_t>(SCREEN_WIDTH_PX) * SCREEN_HEIGHT_PX;
-  for (size_t i = 0; i < pixels; i++) {
-    _framebuffer[i] = color;
+  // The framebuffer lives in PSRAM, so a per-pixel loop over 165k pixels is
+  // expensive enough to dominate a frame. Both UI colors are byte-uniform, so
+  // memset covers every real case; the fallback fills one row and replicates.
+  const uint8_t high = static_cast<uint8_t>(color >> 8);
+  const uint8_t low = static_cast<uint8_t>(color & 0xFF);
+  if (high == low) {
+    memset(_framebuffer, high, kFramebufferBytes);
+    return;
+  }
+
+  for (int x = 0; x < SCREEN_WIDTH_PX; x++) {
+    _framebuffer[x] = color;
+  }
+  constexpr size_t kRowBytes = SCREEN_WIDTH_PX * sizeof(uint16_t);
+  for (int y = 1; y < SCREEN_HEIGHT_PX; y++) {
+    memcpy(_framebuffer + static_cast<size_t>(y) * SCREEN_WIDTH_PX,
+           _framebuffer, kRowBytes);
   }
 }
 
@@ -353,10 +392,41 @@ void TextDisplay::drawText(int x, int y, const String &text, uint16_t color,
         y + (SmartBrickFont::kLineHeight - SmartBrickFont::kBaseline) -
         glyph.boxH - glyph.ofsY;
 
-    for (int gy = 0; gy < glyph.boxH; gy++) {
-      for (int gx = 0; gx < glyph.boxW; gx++) {
-        if (SmartBrickFont::glyphPixelOn(glyph, gx, gy)) {
-          putPixel(glyphLeft + gx, glyphTop + gy, color);
+    if (!_framebuffer) {
+      for (int gy = 0; gy < glyph.boxH; gy++) {
+        for (int gx = 0; gx < glyph.boxW; gx++) {
+          if (SmartBrickFont::glyphPixelOn(glyph, gx, gy)) {
+            putPixel(glyphLeft + gx, glyphTop + gy, color);
+          }
+        }
+      }
+      continue;
+    }
+
+    // Clip once per glyph and walk the packed bitmap sequentially instead of
+    // calling glyphPixelOn()/putPixel() per pixel: a full page of text is tens
+    // of thousands of pixels, and every one of those calls re-derived the bit
+    // offset and re-checked screen bounds.
+    const int gyStart = max(0, -glyphTop);
+    const int gyEnd = min(static_cast<int>(glyph.boxH), SCREEN_HEIGHT_PX - glyphTop);
+    const int gxStart = max(0, -glyphLeft);
+    const int gxEnd = min(static_cast<int>(glyph.boxW), SCREEN_WIDTH_PX - glyphLeft);
+    if (gyStart >= gyEnd || gxStart >= gxEnd) {
+      continue;
+    }
+
+    for (int gy = gyStart; gy < gyEnd; gy++) {
+      uint16_t *row = _framebuffer +
+                      static_cast<size_t>(glyphTop + gy) * SCREEN_WIDTH_PX +
+                      glyphLeft;
+      const int rowBitBase = gy * glyph.boxW;
+      for (int gx = gxStart; gx < gxEnd; gx++) {
+        const int bit = rowBitBase + gx;
+        const uint8_t byte =
+            pgm_read_byte(&SmartBrickFont::kBitmap[glyph.bitmapIndex +
+                                                   (bit >> 3)]);
+        if ((byte >> (7 - (bit & 7))) & 0x01) {
+          row[gx] = color;
         }
       }
     }
@@ -596,6 +666,35 @@ int TextDisplay::wrapBodyText(const String &text, String out[],
 
 void TextDisplay::drawLine(int row, const String &text, uint16_t color) const {
   drawText(kInsetX, kInsetY + row * kCellH, fitLine(text), color);
+}
+
+void TextDisplay::drawFadingLine(int row, const String &text,
+                                 uint16_t baseColor, int charsToEnd,
+                                 int fadeChars) const {
+  // Brightness ramp applied to the newest characters, dimmest first. A
+  // character steps through every entry before settling at baseColor, so the
+  // ramp length is what decides how many levels a character passes through.
+  static constexpr uint16_t kFadeRamp[] = {0x39E7, 0x7BEF, 0xBDF7};
+  constexpr int kFadeRampSize = sizeof(kFadeRamp) / sizeof(kFadeRamp[0]);
+
+  const String line = fitLine(text);
+  const int len = static_cast<int>(line.length());
+  const int y = kInsetY + row * kCellH;
+
+  // Everything old enough to be at full brightness draws as one run; only the
+  // handful of still-fading characters need their own draw call.
+  const int steadyLen = constrain(charsToEnd - fadeChars, 0, len);
+  if (steadyLen > 0) {
+    drawText(kInsetX, y, line.substring(0, steadyLen), baseColor);
+  }
+
+  for (int i = steadyLen; i < len; i++) {
+    const int age = charsToEnd - 1 - i;
+    const uint16_t color = (age >= 0 && age < fadeChars)
+                               ? kFadeRamp[min(age, kFadeRampSize - 1)]
+                               : baseColor;
+    drawText(kInsetX + i * kCellW, y, String(line.charAt(i)), color, 1);
+  }
 }
 
 void TextDisplay::drawEdgeLine(int row, const String &left, const String &right,

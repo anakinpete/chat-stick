@@ -179,6 +179,17 @@ private:
   /// Draw one text line at a row index.
   void drawLine(int row, const String &text, uint16_t color) const;
 
+  /**
+   * @brief Draw a row whose newest characters are still fading in.
+   * @param row Row index within the chat body.
+   * @param text Row text.
+   * @param baseColor Color a fully faded-in character settles at.
+   * @param charsToEnd Rendered characters from this row's start to the newest.
+   * @param fadeChars How many trailing characters are still ramping up.
+   */
+  void drawFadingLine(int row, const String &text, uint16_t baseColor,
+                      int charsToEnd, int fadeChars) const;
+
   /// Draw left and right aligned text on the same row.
   void drawEdgeLine(int row, const String &left, const String &right,
                     uint16_t color) const;

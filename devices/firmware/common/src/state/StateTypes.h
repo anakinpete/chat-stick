@@ -59,6 +59,9 @@ struct DisplayState {
   /// Whether body text should be rendered dimmed.
   bool bodyDim = false;
 
+  /// How many trailing body characters are still fading in from a live reveal.
+  int bodyFadeChars = 0;
+
   /// Whether the menu overlay is currently visible.
   bool showMenu = false;
 

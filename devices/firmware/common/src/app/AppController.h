@@ -85,7 +85,10 @@ private:
   static constexpr unsigned long kWaitingIndicatorRefreshMs = 500;
 
   /// Cadence for the M5-style tool text reveal animation.
-  static constexpr unsigned long kTextRevealFrameMs = 18;
+  static constexpr unsigned long kTextRevealFrameMs = 54;
+
+  /// Trailing characters still ramping to full brightness during a reveal.
+  static constexpr int kTextRevealFadeChars = 3;
 
   /// Slow display cadence while audio playback is active.
   static constexpr unsigned long kPlaybackRenderFrameMs = 90;
@@ -493,6 +496,16 @@ private:
 
   /// Render the UI when needed.
   void renderIfNeeded();
+
+  /**
+   * @brief Advance the reveal animation and repaint outside the main loop.
+   *
+   * WebsocketsClient::poll() drains every frame that is already buffered
+   * before it returns, so a streaming response can keep the main loop inside
+   * a single poll() call for the whole turn. Calling this from the websocket
+   * callbacks keeps text appearing while audio is still arriving.
+   */
+  void serviceUi();
 
   /// Total number of body pages available for the current content.
   int currentBodyPageCount() const;
