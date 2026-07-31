@@ -124,6 +124,21 @@ For plain-renderer hardware evaluation only:
 
 This is temporary and does not resolve the final normal-operation mapping.
 
+### Companion menu
+
+The normal companion menu is:
+
+- Back;
+- Codex;
+- Meeting;
+- Theme;
+- Device.
+
+Legacy conversation actions are not presented as primary companion actions.
+The Device submenu and setup access remain unchanged. The Theme entry currently
+shows manager-reported available themes; only the safe Plain theme is available
+until later theme implementations are added.
+
 ### Setup-mode entry
 
 Automatic entry when settings are missing is agreed. A manual boot gesture is planned but not yet frozen. It may reuse the two-button chord at boot because runtime and boot contexts are separate, but this must be decided explicitly before implementation.
@@ -146,6 +161,19 @@ Later enhancement:
 - preview the highlighted theme before confirmation.
 
 ## Theme visual contract
+
+The implemented theme contract supplies presentation-only tokens for:
+
+- semantic palette colours;
+- typography role and scale;
+- spacing;
+- section dividers and borders;
+- progress-bar treatment;
+- ASCII-safe battery, weather, connection, and activity symbols.
+
+The single companion renderer consumes these tokens. Semantic labels are shared
+across themes, including `WORKING`, `ACTION REQUIRED`, `DONE`, `ERROR`,
+`STALE`, `LOADING`, and `UNAVAILABLE`.
 
 Themes may define:
 
@@ -224,6 +252,12 @@ Meeting title and agenda marquees:
 - pause for 800 ms at the end;
 - restart cleanly without blocking the main loop;
 - clip all drawing to their assigned row.
+
+The Codex task title uses the same non-blocking marquee behavior when it does
+not fit. The plain header uses clear `BAT 100%`-style battery text, a compact
+weather symbol with temperature, and `OFFLINE`, `WIFI`, `SYNC`, or `ONLINE`
+connection labels. Unknown allowance is shown as `ALLOWANCE N/A`, and reset
+information is hidden when it has no meaning.
 
 These timing and layout choices remain provisional until physical hardware
 review. The semantic model is frozen, but the renderer/widget contract is not

@@ -45,6 +45,7 @@ void AppController::setup() {
   tzset();
 
   _settings.init();
+  _themeManager.init(_settings);
   _pendingFirmwareUpdateAtBoot = _settings.pendingFirmwareUpdate();
   _timers.init();
 
@@ -970,18 +971,33 @@ void AppController::selectCurrentMenuItem() {
       closeMenu();
       return;
     case 1:
+      _activePrimaryScreen = PrimaryScreen::Codex;
       closeMenu();
-      startFreshConversation();
       return;
     case 2:
-      openMenu(MenuState::ResumeChat);
+      _activePrimaryScreen = PrimaryScreen::Meeting;
+      closeMenu();
       return;
     case 3:
+      openMenu(MenuState::Theme);
+      return;
+    case 4:
       openMenu(MenuState::Device);
       return;
     default:
       return;
     }
+
+  case MenuState::Theme:
+    if (_menuSelection == 0) {
+      openMenu(MenuState::Home);
+      return;
+    }
+    if (_themeManager.activate(
+            _themeManager.availableThemeAt(_menuSelection - 1), _settings)) {
+      closeMenu();
+    }
+    return;
 
   case MenuState::Device:
     if (_menuSelection == 0) {
@@ -1045,7 +1061,9 @@ void AppController::selectCurrentMenuItem() {
 int AppController::menuItemCount() const {
   switch (_menuState) {
   case MenuState::Home:
-    return 4;
+    return 5;
+  case MenuState::Theme:
+    return 1 + _themeManager.availableThemeCount();
   case MenuState::Device:
     return Board::capabilities().externalSpeakerSwitch ? 5 : 4;
   case MenuState::ResumeChat:
@@ -1063,7 +1081,9 @@ int AppController::menuItemCount() const {
 String AppController::menuTitle() const {
   switch (_menuState) {
   case MenuState::Home:
-    return "Menu";
+    return "Companion";
+  case MenuState::Theme:
+    return "Theme";
   case MenuState::Device:
     return "Device";
   case MenuState::ResumeChat:
@@ -1079,20 +1099,36 @@ String AppController::menuItemLabel(int index) const {
   case MenuState::Home:
     switch (index) {
     case 0:
-      return "Go back";
+      return "Back";
     case 1:
-      return "New conversation";
+      return "Codex";
     case 2:
-      return "Resume chat";
+      return "Meeting";
     case 3:
+      return "Theme";
+    case 4:
       return "Device";
     default:
       return "";
     }
 
+  case MenuState::Theme:
+    if (index == 0) {
+      return "Back";
+    }
+    if (index - 1 < _themeManager.availableThemeCount()) {
+      const ThemeId id = _themeManager.availableThemeAt(index - 1);
+      String label = _themeManager.displayName(id);
+      if (id == _themeManager.activeTheme()) {
+        label += " *";
+      }
+      return label;
+    }
+    return "";
+
   case MenuState::Device:
     if (index == 0) {
-      return "Go back";
+      return "Back";
     }
     if (index == 1) {
       return "Set up WiFi";
@@ -1111,7 +1147,7 @@ String AppController::menuItemLabel(int index) const {
 
   case MenuState::ResumeChat:
     if (index == 0) {
-      return "Go back";
+      return "Back";
     }
     if (_historyLoadStatus == MenuLoadStatus::Loading ||
         _historyLoadStatus == MenuLoadStatus::Idle) {
@@ -1131,7 +1167,7 @@ String AppController::menuItemLabel(int index) const {
 
   case MenuState::Updates:
     if (index == 0) {
-      return "Go back";
+      return "Back";
     }
     if (_firmwareCheckStatus == MenuLoadStatus::Loading ||
         _firmwareCheckStatus == MenuLoadStatus::Idle) {
@@ -1828,7 +1864,8 @@ void AppController::renderIfNeeded() {
   _renderInProgress = true;
   _screenDirty = false;
   if (shouldRenderCompanion()) {
-    _display.renderCompanion(buildCompanionUi(), now);
+    _display.renderCompanion(buildCompanionUi(), _themeManager.activeStyle(),
+                             now);
   } else {
     _display.render(buildDisplayState());
   }

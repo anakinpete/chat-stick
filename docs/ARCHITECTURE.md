@@ -109,6 +109,12 @@ Responsible for visual tokens and visual primitives:
 
 A theme must not own business data, network clients, or navigation rules.
 
+The implemented contract is a lightweight static `ThemeStyle`, not a renderer
+subclass. It contains palette, typography, spacing, border, progress, and
+semantic-symbol tokens. `BaseTheme` supplies the safe Plain implementation.
+`SemanticPresentation` centrally maps semantic states to clear labels and
+theme-selected symbols.
+
 ## Layout ownership clarification
 
 The shared renderer owns **semantic layout and information order**. A theme may vary the geometry of a panel or widget inside an allocated region, but it must not rearrange the product into a different application.
@@ -154,32 +160,16 @@ src/
 
 File names may be adjusted to fit the existing code. The separation of responsibilities matters more than these exact names.
 
-## Theme interface direction
+## Theme interface
 
-A class-based interface remains the preferred direction because themes may need small amounts of visual state.
+`ThemeId` reserves Plain, NERV, Ghost HUD, Pip-Boy, and LCARS identities.
+Only Plain is currently available. The style contract uses static token data
+rather than virtual renderer classes, which fits the current memory constraints
+and keeps one Codex/Meeting implementation.
 
-Illustrative only:
-
-```cpp
-class Theme {
-public:
-    virtual ~Theme() = default;
-
-    virtual ThemeId id() const = 0;
-    virtual const char* name() const = 0;
-
-    virtual const ThemePalette& palette() const = 0;
-    virtual void drawFrame(Display& display, const Rect& bounds) = 0;
-    virtual void drawProgress(Display& display,
-                              const Rect& bounds,
-                              int value) = 0;
-    virtual void drawAlert(Display& display,
-                           const Rect& bounds,
-                           AlertType type) = 0;
-};
-```
-
-Do not freeze this exact C++ API before inspecting the existing display abstraction and memory constraints.
+The renderer receives the active `ThemeStyle` for each frame. It owns field
+order, layout, state handling, and marquee behavior; the theme owns visual
+tokens only.
 
 ## Theme manager
 
@@ -191,6 +181,11 @@ The theme manager should:
 - validate saved theme values;
 - save a confirmed selection through the settings store;
 - fall back to a known base theme when a value is invalid.
+
+These responsibilities are now implemented. Identifier parsing and
+availability validation have one mapping in `ThemeManager`; `SettingsStore`
+uses that mapping and remains the only Preferences owner. Recognized but
+unimplemented theme identifiers also fall back to Plain.
 
 ## Persistent settings
 

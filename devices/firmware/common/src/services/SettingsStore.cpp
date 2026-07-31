@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "WiFiService.h"
 #include "credentials.h"
+#include "state/ThemeManager.h"
 
 namespace {
 bool isValidPort(int port) { return port >= 1 && port <= 65535; }
@@ -42,7 +43,7 @@ void SettingsStore::init() {
   _wifiPassword = WIFI_NETWORK_COUNT > 0 ? WIFI_NETWORKS[0].password : "";
   _backendHost = DEVELOPMENT_SERVER_ADDRESS;
   _backendPort = DEVELOPMENT_SERVER_PORT;
-  _activeTheme = kDefaultTheme;
+  _activeTheme = ThemeManager::identifier(ThemeId::Plain);
   _hasSavedWifi = false;
   _hasSavedBackend = false;
   _pendingFirmwareUpdate = false;
@@ -84,8 +85,10 @@ void SettingsStore::init() {
     _hasSavedBackend = true;
   }
 
-  const String savedTheme = _prefs.getString(kActiveThemeKey, kDefaultTheme);
-  _activeTheme = isValidTheme(savedTheme) ? savedTheme : String(kDefaultTheme);
+  const String savedTheme = _prefs.getString(
+      kActiveThemeKey, ThemeManager::identifier(ThemeId::Plain));
+  _activeTheme = ThemeManager::identifier(
+      ThemeManager::resolveAvailableIdentifier(savedTheme));
 
   _pendingFirmwareUpdate = _prefs.getBool(kFirmwarePendingKey, false);
   _pendingFirmwareVersion =
@@ -226,21 +229,19 @@ bool SettingsStore::saveBackend(const String &host, int port) {
 }
 
 bool SettingsStore::saveActiveTheme(const String &themeId) {
-  if (!_ready || !isValidTheme(themeId)) {
+  ThemeId parsed = ThemeId::Plain;
+  if (!_ready || !ThemeManager::tryParseIdentifier(themeId, parsed) ||
+      !ThemeManager::isAvailable(parsed)) {
     return false;
   }
 
-  if (_prefs.putString(kActiveThemeKey, themeId) == 0) {
+  const String canonicalId = ThemeManager::identifier(parsed);
+  if (_prefs.putString(kActiveThemeKey, canonicalId) == 0) {
     return false;
   }
 
-  _activeTheme = themeId;
+  _activeTheme = canonicalId;
   return true;
-}
-
-bool SettingsStore::isValidTheme(const String &themeId) {
-  return themeId == "nerv" || themeId == "ghost" || themeId == "pip-boy" ||
-         themeId == "lcars";
 }
 
 void SettingsStore::setPendingFirmwareUpdate(int version,

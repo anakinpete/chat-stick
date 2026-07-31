@@ -29,6 +29,10 @@ These items are deliberately unresolved. A coding agent must not silently choose
 - What exact boot gesture manually opens setup mode?
 - Does the theme selector wrap from the last theme to the first?
 - How does the user cancel the theme selector without changing selection?
+- Should the final selector show unavailable theme names or only implemented
+  themes?
+- Which control replaces the current both-button factory-reset chord before
+  the agreed hold-both-buttons theme selector is enabled?
 
 ## Setup portal
 
@@ -46,6 +50,8 @@ These items are deliberately unresolved. A coding agent must not silently choose
   900 ms start and 800 ms end pauses?
 - Do the plain renderer's text bounds and font remain readable on the physical
   display without overlap or clipping?
+- Which final glyph set can represent battery, weather, and connection states
+  clearly across all themes on the available fonts?
 
 ## Backend and deployment
 

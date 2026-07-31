@@ -160,18 +160,19 @@ void TextDisplay::render(const DisplayState &state) {
 }
 
 void TextDisplay::renderCompanion(const CompanionUiModel &model,
+                                  const ThemeStyle &theme,
                                   unsigned long nowMs) {
   if (_canvasReady) {
-    _canvas.fillScreen(COLOR_BLACK);
+    _canvas.fillScreen(theme.palette.background);
     _canvas.setFont(&fonts::AsciiFont8x16);
-    _canvas.setTextSize(1);
+    _canvas.setTextSize(theme.typography.textScale);
   } else {
-    M5.Display.fillScreen(COLOR_BLACK);
+    M5.Display.fillScreen(theme.palette.background);
     M5.Display.setFont(&fonts::AsciiFont8x16);
-    M5.Display.setTextSize(1);
+    M5.Display.setTextSize(theme.typography.textScale);
   }
 
-  _companionRenderer.render(_canvas, _canvasReady, model, nowMs);
+  _companionRenderer.render(_canvas, _canvasReady, model, theme, nowMs);
   if (_canvasReady) {
     flushCanvas();
   }

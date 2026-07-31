@@ -27,7 +27,8 @@ public:
   void init();
   void setBrightness(uint8_t brightness);
   void render(const DisplayState &state);
-  void renderCompanion(const CompanionUiModel &model, unsigned long nowMs);
+  void renderCompanion(const CompanionUiModel &model, const ThemeStyle &theme,
+                       unsigned long nowMs);
   bool companionNeedsFrame(unsigned long nowMs) const;
   int pageCountForText(const String &text) const;
   String layoutTextForReveal(const String &text) const;

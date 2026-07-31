@@ -11,6 +11,7 @@
 #include "services/WiFiService.h"
 #include "state/CompanionDemoData.h"
 #include "state/StateTypes.h"
+#include "state/ThemeManager.h"
 #include "ui/TextDisplay.h"
 #include "app/TurnController.h"
 #include <freertos/FreeRTOS.h>
@@ -48,7 +49,7 @@ private:
   /**
    * @brief Menu screens available from the UI overlay.
    */
-  enum class MenuState { Home, Device, ResumeChat, Updates };
+  enum class MenuState { Home, Theme, Device, ResumeChat, Updates };
 
   /**
    * @brief Async loading status for menu screens backed by network requests.
@@ -311,6 +312,9 @@ private:
 
   /// Persistent settings store.
   SettingsStore _settings;
+
+  /// Active visual theme and theme enumeration.
+  ThemeManager _themeManager;
 
   /// Local persistent timer store.
   TimerService _timers;

@@ -128,3 +128,22 @@ review.
 
 **Reason:** Make the companion product inspectable on the real display without
 coupling presentation to providers or prematurely implementing themes.
+
+## ADR-018 — Use a lightweight theme-style contract
+
+**Decision:** Keep one `CompanionRenderer` and pass it a static `ThemeStyle`
+containing presentation-only palette, typography, spacing, border, progress,
+and semantic-symbol tokens. Use `SemanticPresentation` for shared human-readable
+state labels.
+
+`ThemeManager` centrally maps identifiers, exposes available themes, loads the
+saved selection through `SettingsStore`, and falls back to Plain for invalid or
+unimplemented themes. Plain is the only available theme in this phase; NERV,
+Ghost HUD, Pip-Boy, and LCARS identities are reserved but unavailable.
+
+The normal menu is Back, Codex, Meeting, Theme, and Device. The Theme submenu is
+manager-backed, but the final two-button selector gesture remains deferred.
+
+**Reason:** Establish theme ownership without virtual-heavy duplicate renderers
+or theme branches in application logic, while retaining a readable hardware
+fallback.

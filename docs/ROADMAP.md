@@ -60,6 +60,9 @@ on hardware.
 
 ## Phase 4 — Theme engine and selector
 
+Status: theme contract and manager implemented; selector and visual themes
+pending.
+
 1. Add `ThemeId` and `ThemeManager`.
 2. Extract palette, typography, frame, alert, icon, and progress styling.
 3. Add persistent active-theme selection.
@@ -68,6 +71,11 @@ on hardware.
 6. Add a basic preview only after selection works reliably.
 
 Exit condition: the plain renderer can switch visual themes without changing data or behavior.
+
+`ThemeId`, `ThemeStyle`, `BaseTheme`, semantic presentation helpers, and
+`ThemeManager` are implemented. Plain is the only selectable theme. The
+manager-backed menu entry is available for structural validation; the final
+hold-both-buttons selector remains deferred.
 
 ## Phase 5 — Four polished themes
 

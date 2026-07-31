@@ -138,9 +138,6 @@ public:
    */
   bool saveActiveTheme(const String &themeId);
 
-  /// Whether a theme identifier is supported by this firmware.
-  static bool isValidTheme(const String &themeId);
-
   /**
    * @brief Record a deferred firmware update for installation on next boot.
    * @param version Firmware version to install.
@@ -262,9 +259,6 @@ private:
 
   /// Preferences key for the active visual theme.
   static constexpr const char *kActiveThemeKey = "theme";
-
-  /// Safe visual theme used when no valid selection exists.
-  static constexpr const char *kDefaultTheme = "nerv";
 
   /// Preferences key for deferred firmware update flag.
   static constexpr const char *kFirmwarePendingKey = "fw_pending";

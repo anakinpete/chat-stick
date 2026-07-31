@@ -1,154 +1,11 @@
 #include "CompanionRenderer.h"
 
 #include "../Config.h"
+#include "state/SemanticPresentation.h"
 #include <stdio.h>
 #include <time.h>
 
 namespace {
-constexpr uint16_t COLOR_PRIMARY = 0xFFFF;
-constexpr uint16_t COLOR_SECONDARY = 0xBDF7;
-constexpr uint16_t COLOR_MUTED = 0x7BEF;
-constexpr uint16_t COLOR_INFO = 0x07FF;
-constexpr uint16_t COLOR_SUCCESS = 0x07E0;
-constexpr uint16_t COLOR_WARNING = 0xFFE0;
-constexpr uint16_t COLOR_ERROR = 0xF800;
-
-const char *connectionLabel(ConnectionState state) {
-  switch (state) {
-  case ConnectionState::Offline:
-    return "OFF";
-  case ConnectionState::WiFiOnly:
-    return "WIFI";
-  case ConnectionState::BackendConnecting:
-    return "LINK";
-  case ConnectionState::Online:
-    return "NET";
-  }
-  return "OFF";
-}
-
-uint16_t connectionColor(ConnectionState state) {
-  switch (state) {
-  case ConnectionState::Online:
-    return COLOR_SUCCESS;
-  case ConnectionState::BackendConnecting:
-  case ConnectionState::WiFiOnly:
-    return COLOR_WARNING;
-  case ConnectionState::Offline:
-  default:
-    return COLOR_ERROR;
-  }
-}
-
-const char *weatherLabel(WeatherCondition condition) {
-  switch (condition) {
-  case WeatherCondition::Clear:
-    return "SUN";
-  case WeatherCondition::PartlyCloudy:
-    return "PCL";
-  case WeatherCondition::Cloudy:
-    return "CLD";
-  case WeatherCondition::Rain:
-    return "RAIN";
-  case WeatherCondition::Storm:
-    return "STM";
-  case WeatherCondition::Snow:
-    return "SNOW";
-  case WeatherCondition::Fog:
-    return "FOG";
-  case WeatherCondition::Wind:
-    return "WND";
-  case WeatherCondition::Unknown:
-  default:
-    return "WX";
-  }
-}
-
-const char *activityLabel(CodexActivityState state) {
-  switch (state) {
-  case CodexActivityState::Idle:
-    return "IDLE";
-  case CodexActivityState::Working:
-    return "WORKING";
-  case CodexActivityState::Waiting:
-    return "WAITING";
-  case CodexActivityState::Complete:
-    return "COMPLETE";
-  case CodexActivityState::Error:
-    return "ERROR";
-  case CodexActivityState::Unavailable:
-  default:
-    return "UNAVAILABLE";
-  }
-}
-
-const char *availabilityLabel(DataAvailability state) {
-  switch (state) {
-  case DataAvailability::Unknown:
-    return "UNKNOWN";
-  case DataAvailability::Loading:
-    return "LOADING";
-  case DataAvailability::Available:
-    return "AVAILABLE";
-  case DataAvailability::Stale:
-    return "STALE";
-  case DataAvailability::Unavailable:
-    return "UNAVAILABLE";
-  case DataAvailability::Error:
-    return "ERROR";
-  }
-  return "UNKNOWN";
-}
-
-uint16_t availabilityColor(DataAvailability state) {
-  switch (state) {
-  case DataAvailability::Loading:
-    return COLOR_INFO;
-  case DataAvailability::Available:
-    return COLOR_SUCCESS;
-  case DataAvailability::Stale:
-    return COLOR_WARNING;
-  case DataAvailability::Error:
-    return COLOR_ERROR;
-  case DataAvailability::Unavailable:
-  case DataAvailability::Unknown:
-  default:
-    return COLOR_MUTED;
-  }
-}
-
-uint16_t severityColor(UiSeverity severity) {
-  switch (severity) {
-  case UiSeverity::Info:
-    return COLOR_INFO;
-  case UiSeverity::Warning:
-    return COLOR_WARNING;
-  case UiSeverity::Success:
-    return COLOR_SUCCESS;
-  case UiSeverity::Error:
-    return COLOR_ERROR;
-  case UiSeverity::Normal:
-  default:
-    return COLOR_PRIMARY;
-  }
-}
-
-const char *severityLabel(UiSeverity severity) {
-  switch (severity) {
-  case UiSeverity::Info:
-    return "INFO ";
-  case UiSeverity::Warning:
-    return "WARN ";
-  case UiSeverity::Success:
-    return "OK ";
-  case UiSeverity::Error:
-    return "ERR ";
-  case UiSeverity::Normal:
-  default:
-    return "";
-  }
-}
-
 void formatTime(const OptionalValue<int64_t> &value, char *buffer,
                 size_t bufferSize) {
   if (!value.known) {
@@ -188,63 +45,35 @@ void formatDuration(uint32_t seconds, const char *suffix, char *buffer,
   }
 }
 
-const char *meetingStateLabel(MeetingState state) {
-  switch (state) {
-  case MeetingState::None:
-    return "NONE";
-  case MeetingState::Upcoming:
-    return "NEXT";
-  case MeetingState::InProgress:
-    return "NOW";
-  case MeetingState::Finished:
-    return "FINISHED";
-  case MeetingState::Unavailable:
-  default:
-    return "UNAVAILABLE";
-  }
-}
-
-const char *locationTypeLabel(MeetingLocationType type) {
-  switch (type) {
-  case MeetingLocationType::Physical:
-    return "PLACE";
-  case MeetingLocationType::VideoCall:
-    return "VIDEO";
-  case MeetingLocationType::PhoneCall:
-    return "PHONE";
-  case MeetingLocationType::Hybrid:
-    return "HYBRID";
-  case MeetingLocationType::Other:
-    return "OTHER";
-  case MeetingLocationType::Unknown:
-  default:
-    return "WHERE";
-  }
-}
 } // namespace
 
 void CompanionRenderer::render(M5Canvas &canvas, bool canvasReady,
                                const CompanionUiModel &model,
+                               const ThemeStyle &theme,
                                unsigned long nowMs) {
   if (!_hasRenderedScreen || _lastScreen != model.activeScreen) {
+    _codexTaskMarquee.reset();
     _meetingTitleMarquee.reset();
     _meetingAgendaMarquee.reset();
     _lastScreen = model.activeScreen;
     _hasRenderedScreen = true;
   }
 
-  drawHeader(canvas, canvasReady, model.header);
+  drawHeader(canvas, canvasReady, model.header, theme);
   if (model.activeScreen == PrimaryScreen::Codex) {
-    drawCodexScreen(canvas, canvasReady, model.codex);
+    drawCodexScreen(canvas, canvasReady, model.codex, theme, nowMs);
   } else {
-    drawMeetingScreen(canvas, canvasReady, model, nowMs);
+    drawMeetingScreen(canvas, canvasReady, model, theme, nowMs);
   }
-  drawFooter(canvas, canvasReady);
+  drawFooter(canvas, canvasReady, theme);
 }
 
 bool CompanionRenderer::needsFrame(unsigned long nowMs) const {
-  if (!_hasRenderedScreen || _lastScreen != PrimaryScreen::Meeting) {
+  if (!_hasRenderedScreen) {
     return false;
+  }
+  if (_lastScreen == PrimaryScreen::Codex) {
+    return _codexTaskMarquee.needsFrame(nowMs);
   }
   return _meetingTitleMarquee.needsFrame(nowMs) ||
          _meetingAgendaMarquee.needsFrame(nowMs);
@@ -252,15 +81,18 @@ bool CompanionRenderer::needsFrame(unsigned long nowMs) const {
 
 void CompanionRenderer::reset() {
   _hasRenderedScreen = false;
+  _codexTaskMarquee.reset();
   _meetingTitleMarquee.reset();
   _meetingAgendaMarquee.reset();
 }
 
 void CompanionRenderer::drawHeader(M5Canvas &canvas, bool canvasReady,
-                                   const HeaderData &header) const {
+                                   const HeaderData &header,
+                                   const ThemeStyle &theme) const {
+  const int edge = theme.spacing.edgeInsetPx;
   char timeText[8];
   formatTime(header.currentTimeUnixSeconds, timeText, sizeof(timeText));
-  drawText(canvas, canvasReady, 4, 0, timeText, COLOR_PRIMARY);
+  drawText(canvas, canvasReady, edge, 0, timeText, theme.palette.primary);
 
   char weatherText[14];
   if (header.weather.availability == DataAvailability::Available ||
@@ -271,94 +103,143 @@ void CompanionRenderer::drawHeader(M5Canvas &canvas, bool canvasReady,
                             ? 'F'
                             : 'C';
       snprintf(weatherText, sizeof(weatherText), "%s %.0f%c",
-               weatherLabel(header.weather.condition),
+               SemanticPresentation::weatherSymbol(theme,
+                                                     header.weather.condition),
                header.weather.temperature.value, unit);
     } else {
       snprintf(weatherText, sizeof(weatherText), "%s --",
-               weatherLabel(header.weather.condition));
+               SemanticPresentation::weatherSymbol(theme,
+                                                     header.weather.condition));
     }
   } else {
-    snprintf(weatherText, sizeof(weatherText), "WX --");
+    snprintf(weatherText, sizeof(weatherText), "%s --",
+             theme.symbols.weatherUnknown);
   }
-  drawText(canvas, canvasReady, 52, 0, weatherText, COLOR_SECONDARY);
+  drawText(canvas, canvasReady, 52, 0, weatherText, theme.palette.secondary);
 
-  char batteryText[8];
+  char batteryText[12];
   if (header.batteryPercentage.known) {
-    snprintf(batteryText, sizeof(batteryText), "B%u",
+    snprintf(batteryText, sizeof(batteryText), "%s %u%%",
+             theme.symbols.battery,
              static_cast<unsigned>(header.batteryPercentage.value));
   } else {
-    snprintf(batteryText, sizeof(batteryText), "B--");
+    snprintf(batteryText, sizeof(batteryText), "%s --",
+             theme.symbols.battery);
   }
-  drawText(canvas, canvasReady, 148, 0, batteryText, COLOR_SECONDARY);
-  drawText(canvas, canvasReady, 204, 0, connectionLabel(header.connection),
-           connectionColor(header.connection));
-  drawHorizontalLine(canvas, canvasReady, 16, COLOR_MUTED);
+  drawText(canvas, canvasReady, 108, 0, batteryText, theme.palette.secondary);
+
+  const char *connectionSymbol =
+      SemanticPresentation::connectionSymbol(theme, header.connection);
+  char connectionText[14];
+  if (theme.symbols.indicatorMode == ThemeIndicatorMode::SymbolAndText &&
+      connectionSymbol && connectionSymbol[0] != '\0') {
+    snprintf(connectionText, sizeof(connectionText), "%s %s", connectionSymbol,
+             SemanticPresentation::connectionLabel(header.connection));
+  } else {
+    snprintf(connectionText, sizeof(connectionText), "%s",
+             SemanticPresentation::connectionLabel(header.connection));
+  }
+  drawText(canvas, canvasReady, 180, 0, connectionText,
+           SemanticPresentation::connectionColor(theme, header.connection));
+  if (theme.borders.showSectionDividers) {
+    drawHorizontalLine(canvas, canvasReady, 16, theme.palette.muted,
+                       theme.borders.dividerThicknessPx);
+  }
 }
 
 void CompanionRenderer::drawCodexScreen(M5Canvas &canvas, bool canvasReady,
-                                        const CodexStatusData &codex) const {
+                                        const CodexStatusData &codex,
+                                        const ThemeStyle &theme,
+                                        unsigned long nowMs) {
   const char *stateText = codex.availability == DataAvailability::Available
-                              ? activityLabel(codex.activity)
-                              : availabilityLabel(codex.availability);
+                              ? SemanticPresentation::activityLabel(
+                                    codex.activity)
+                              : SemanticPresentation::availabilityLabel(
+                                    codex.availability);
+  const char *activitySymbol =
+      SemanticPresentation::activitySymbol(theme, codex.activity);
   char heading[28];
-  snprintf(heading, sizeof(heading), "CODEX  %s%s",
-           codex.availability == DataAvailability::Available
-               ? severityLabel(codex.severity)
-               : "",
-           stateText);
+  if (activitySymbol && activitySymbol[0] != '\0' &&
+      codex.availability == DataAvailability::Available) {
+    snprintf(heading, sizeof(heading), "CODEX  %s %s", activitySymbol,
+             stateText);
+  } else {
+    snprintf(heading, sizeof(heading), "CODEX  %s", stateText);
+  }
   const uint16_t headingColor =
       codex.availability == DataAvailability::Available
-          ? severityColor(codex.severity)
-          : availabilityColor(codex.availability);
+          ? SemanticPresentation::severityColor(theme, codex.severity)
+          : SemanticPresentation::availabilityColor(theme,
+                                                     codex.availability);
   drawText(canvas, canvasReady, 4, 18, heading, headingColor);
 
-  drawText(canvas, canvasReady, 4, 35, "TASK", COLOR_MUTED);
+  drawText(canvas, canvasReady, 4, 35, "TASK", theme.palette.muted);
   if (codex.currentTaskTitle.isEmpty()) {
-    drawText(canvas, canvasReady, 44, 35, "No active task", COLOR_PRIMARY);
+    _codexTaskMarquee.reset();
+    drawText(canvas, canvasReady, 44, 35, "No active task",
+             theme.palette.primary);
   } else {
+    _codexTaskMarquee.configure(codex.currentTaskTitle, 192, nowMs);
     drawClippedText(canvas, canvasReady, 44, 35, 192,
-                    codex.currentTaskTitle, 0, COLOR_PRIMARY);
+                    codex.currentTaskTitle,
+                    _codexTaskMarquee.offsetPixels(nowMs),
+                    theme.palette.primary);
+    _codexTaskMarquee.noteRendered(nowMs);
   }
 
   char taskPercent[8];
   char allowancePercent[8];
   formatPercentage(codex.taskProgressPercentage, taskPercent,
                    sizeof(taskPercent));
-  formatPercentage(codex.allowanceRemainingPercentage, allowancePercent,
-                   sizeof(allowancePercent));
+  if (codex.allowanceAvailability == DataAvailability::Available &&
+      codex.allowanceRemainingPercentage.known) {
+    formatPercentage(codex.allowanceRemainingPercentage, allowancePercent,
+                     sizeof(allowancePercent));
+  } else {
+    snprintf(allowancePercent, sizeof(allowancePercent), "N/A");
+  }
   char metrics[32];
-  snprintf(metrics, sizeof(metrics), "PROG %s   ALLOW %s", taskPercent,
+  snprintf(metrics, sizeof(metrics), "TASK %s  ALLOWANCE %s", taskPercent,
            allowancePercent);
-  drawText(canvas, canvasReady, 4, 56, metrics, COLOR_PRIMARY);
+  drawText(canvas, canvasReady, 4, 56, metrics, theme.palette.primary);
 
   char resetTime[8];
-  drawText(canvas, canvasReady, 4, 76, "RESET", COLOR_MUTED);
-  if (!codex.allowanceResetText.isEmpty()) {
+  if (codex.allowanceAvailability == DataAvailability::Available &&
+      !codex.allowanceResetText.isEmpty()) {
+    drawText(canvas, canvasReady, 4, 76, "RESET", theme.palette.muted);
     drawClippedText(canvas, canvasReady, 52, 76, 184,
-                    codex.allowanceResetText, 0, COLOR_SECONDARY);
-  } else if (codex.allowanceResetUnixSeconds.known) {
+                    codex.allowanceResetText, 0, theme.palette.secondary);
+  } else if (codex.allowanceAvailability == DataAvailability::Available &&
+             codex.allowanceResetUnixSeconds.known) {
+    drawText(canvas, canvasReady, 4, 76, "RESET", theme.palette.muted);
     formatTime(codex.allowanceResetUnixSeconds, resetTime, sizeof(resetTime));
-    drawText(canvas, canvasReady, 52, 76, resetTime, COLOR_SECONDARY);
-  } else {
-    drawText(canvas, canvasReady, 52, 76, "--", COLOR_SECONDARY);
+    drawText(canvas, canvasReady, 52, 76, resetTime,
+             theme.palette.secondary);
+  } else if (codex.allowanceAvailability == DataAvailability::Loading) {
+    drawText(canvas, canvasReady, 4, 76, "ALLOWANCE LOADING",
+             theme.palette.info);
+  } else if (codex.allowanceAvailability == DataAvailability::Stale) {
+    drawText(canvas, canvasReady, 4, 76, "ALLOWANCE STALE",
+             theme.palette.warning);
   }
 
   char updated[8];
   formatTime(codex.lastUpdateUnixSeconds, updated, sizeof(updated));
-  drawText(canvas, canvasReady, 4, 96, "UPDATED", COLOR_MUTED);
-  drawText(canvas, canvasReady, 68, 96, updated, COLOR_SECONDARY);
+  drawText(canvas, canvasReady, 4, 96, "UPDATED", theme.palette.muted);
+  drawText(canvas, canvasReady, 68, 96, updated, theme.palette.secondary);
 }
 
 void CompanionRenderer::drawMeetingScreen(M5Canvas &canvas, bool canvasReady,
                                           const CompanionUiModel &model,
+                                          const ThemeStyle &theme,
                                           unsigned long nowMs) {
   const MeetingData &meeting = model.meeting;
   const bool backendOffline =
       model.header.connection != ConnectionState::Online;
   const char *stateText =
       meeting.availability == DataAvailability::Available
-          ? meetingStateLabel(meeting.state)
-          : availabilityLabel(meeting.availability);
+          ? SemanticPresentation::meetingStateLabel(meeting.state)
+          : SemanticPresentation::availabilityLabel(meeting.availability);
   if (backendOffline && meeting.availability == DataAvailability::Stale) {
     stateText = "OFFLINE";
   }
@@ -367,14 +248,16 @@ void CompanionRenderer::drawMeetingScreen(M5Canvas &canvas, bool canvasReady,
   snprintf(heading, sizeof(heading), "MEETING  %s", stateText);
   drawText(canvas, canvasReady, 4, 18, heading,
            meeting.availability == DataAvailability::Available
-               ? COLOR_PRIMARY
-               : availabilityColor(meeting.availability));
+               ? theme.palette.primary
+               : SemanticPresentation::availabilityColor(
+                     theme, meeting.availability));
 
   if (meeting.state == MeetingState::None &&
       meeting.availability == DataAvailability::Available) {
-    drawText(canvas, canvasReady, 4, 48, "NO MEETING", COLOR_SUCCESS);
+    drawText(canvas, canvasReady, 4, 48, "NO MEETING",
+             theme.palette.success);
     drawText(canvas, canvasReady, 4, 68, "Calendar is clear",
-             COLOR_SECONDARY);
+             theme.palette.secondary);
     _meetingTitleMarquee.reset();
     _meetingAgendaMarquee.reset();
     return;
@@ -389,7 +272,8 @@ void CompanionRenderer::drawMeetingScreen(M5Canvas &canvas, bool canvasReady,
              meeting.availability == DataAvailability::Loading
                  ? "Loading meeting data..."
                  : "Meeting data unavailable",
-             availabilityColor(meeting.availability));
+             SemanticPresentation::availabilityColor(theme,
+                                                     meeting.availability));
     _meetingTitleMarquee.reset();
     _meetingAgendaMarquee.reset();
     return;
@@ -408,37 +292,46 @@ void CompanionRenderer::drawMeetingScreen(M5Canvas &canvas, bool canvasReady,
   }
   char schedule[32];
   snprintf(schedule, sizeof(schedule), "%s  %s", startText, timing);
-  drawText(canvas, canvasReady, 4, 34, schedule, COLOR_SECONDARY);
+  drawText(canvas, canvasReady, 4, 34, schedule, theme.palette.secondary);
 
   _meetingTitleMarquee.configure(meeting.title, kTextRightPx - kTextLeftPx,
                                   nowMs);
   drawClippedText(canvas, canvasReady, kTextLeftPx, 51,
                   kTextRightPx - kTextLeftPx, meeting.title,
-                  _meetingTitleMarquee.offsetPixels(nowMs), COLOR_PRIMARY);
+                  _meetingTitleMarquee.offsetPixels(nowMs),
+                  theme.palette.primary);
   _meetingTitleMarquee.noteRendered(nowMs);
 
   drawText(canvas, canvasReady, 4, 68,
-           locationTypeLabel(meeting.locationType), COLOR_MUTED);
+           SemanticPresentation::locationTypeLabel(meeting.locationType),
+           theme.palette.muted);
   if (meeting.location.isEmpty()) {
-    drawText(canvas, canvasReady, 52, 68, "--", COLOR_SECONDARY);
+    drawText(canvas, canvasReady, 76, 68, "--", theme.palette.secondary);
   } else {
-    drawClippedText(canvas, canvasReady, 52, 68, 184, meeting.location, 0,
-                    COLOR_SECONDARY);
+    drawClippedText(canvas, canvasReady, 76, 68, 160, meeting.location, 0,
+                    theme.palette.secondary);
   }
 
-  drawText(canvas, canvasReady, 4, 84, "AGENDA", COLOR_MUTED);
+  drawText(canvas, canvasReady, 4, 84, "AGENDA", theme.palette.muted);
   _meetingAgendaMarquee.configure(meeting.agendaSummary,
                                    kTextRightPx - kTextLeftPx, nowMs);
   drawClippedText(canvas, canvasReady, kTextLeftPx, 101,
                   kTextRightPx - kTextLeftPx, meeting.agendaSummary,
-                  _meetingAgendaMarquee.offsetPixels(nowMs), COLOR_SECONDARY);
+                  _meetingAgendaMarquee.offsetPixels(nowMs),
+                  theme.palette.secondary);
   _meetingAgendaMarquee.noteRendered(nowMs);
 }
 
-void CompanionRenderer::drawFooter(M5Canvas &canvas, bool canvasReady) const {
-  drawHorizontalLine(canvas, canvasReady, 118, COLOR_MUTED);
-  drawText(canvas, canvasReady, 4, 119, "A VIEW", COLOR_MUTED);
-  drawText(canvas, canvasReady, 124, 119, "HOLD B MENU", COLOR_MUTED);
+void CompanionRenderer::drawFooter(M5Canvas &canvas, bool canvasReady,
+                                   const ThemeStyle &theme) const {
+  if (theme.borders.showSectionDividers) {
+    drawHorizontalLine(canvas, canvasReady, 118, theme.palette.muted,
+                       theme.borders.dividerThicknessPx);
+  }
+  drawText(canvas, canvasReady, theme.spacing.edgeInsetPx, 119, "A VIEW",
+           theme.palette.muted);
+  drawText(canvas, canvasReady, 124, 119, "HOLD B MENU",
+           theme.palette.muted);
 }
 
 void CompanionRenderer::drawText(M5Canvas &canvas, bool canvasReady, int x,
@@ -480,10 +373,14 @@ void CompanionRenderer::drawClippedText(
 }
 
 void CompanionRenderer::drawHorizontalLine(M5Canvas &canvas, bool canvasReady,
-                                           int y, uint16_t color) const {
-  if (canvasReady) {
-    canvas.drawFastHLine(0, y, SCREEN_WIDTH_PX, color);
-    return;
+                                           int y, uint16_t color,
+                                           int thickness) const {
+  const int safeThickness = max(1, thickness);
+  for (int row = 0; row < safeThickness; ++row) {
+    if (canvasReady) {
+      canvas.drawFastHLine(0, y + row, SCREEN_WIDTH_PX, color);
+    } else {
+      M5.Display.drawFastHLine(0, y + row, SCREEN_WIDTH_PX, color);
+    }
   }
-  M5.Display.drawFastHLine(0, y, SCREEN_WIDTH_PX, color);
 }
