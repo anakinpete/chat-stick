@@ -196,3 +196,22 @@ physical review, and a polished landscape NERV composition is deferred.
 
 **Reason:** Deliver one complete visual identity for hardware evaluation while
 preserving a single data model, renderer, screen flow, and persistence path.
+
+## ADR-022 — Codex app-server is the local allowance source
+
+**Decision:** Read Codex allowance data through the locally installed official
+Codex CLI app-server rather than copying credentials or calling undocumented
+remote endpoints. A loopback-only Node sidecar owns the short-lived stdio
+subprocess, protocol handshake, normalization, 60-second cache, stale fallback,
+timeout, and cleanup. The existing Worker exposes the safe normalized result at
+`/api/codex/allowance` and remains the device-facing authorization boundary.
+
+The normalized contract supports multiple metered buckets and generic primary
+or secondary windows. Missing windows, reset timestamps, and credit information
+remain missing; used percentage is the source value and remaining percentage is
+derived as `100 - used`. Raw account objects, email addresses, identifiers, and
+authentication material are never returned.
+
+**Reason:** Reuse the official authenticated local boundary while keeping the
+device contract generic, cacheable, failure-tolerant, and secret-safe. Codex
+activity state and elapsed task time remain separate Task 8B work.

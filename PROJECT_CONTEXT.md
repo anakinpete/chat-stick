@@ -34,7 +34,11 @@ The MVP has two main information screens with a shared header:
 - Codex usage or progress information;
 - theme-styled progress and warning states where the data requires them.
 
-The exact Codex metric names and source are not yet frozen. Do not invent a backend contract without resolving the items in `docs/OPEN_QUESTIONS.md`.
+Codex allowance windows come from the locally installed official Codex
+app-server through the trusted local backend. The allowance model supports
+generic multiple windows, honest missing values, reset timestamps, and stale
+cached data. Codex activity, task title, and elapsed task timing remain a
+separate integration concern.
 
 ### Screen 2 — Meeting / agenda
 

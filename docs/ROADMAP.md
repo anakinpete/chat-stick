@@ -111,6 +111,12 @@ Integrate the agreed core data sources:
 - Codex status/usage source;
 - meeting/calendar source.
 
+Codex allowance backend integration is implemented through the official local
+Codex app-server. The local sidecar and `/api/codex/allowance` endpoint now
+provide generic cached windows with stale/error states and no authentication
+material. Firmware consumption is intentionally deferred; Codex activity,
+task title, and elapsed task time remain Task 8B work.
+
 Then improve:
 
 - reconnect behavior;

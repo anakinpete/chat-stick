@@ -53,6 +53,23 @@ Responsible for:
 
 Services update shared state; they do not draw screens.
 
+### Local Codex allowance boundary
+
+The Cloudflare Worker runtime cannot launch a Windows process. For local
+development, a loopback-only Node sidecar invokes the installed official Codex
+CLI as `codex app-server --stdio`, completes the JSONL initialization handshake,
+and reads `account/read` plus `account/rateLimits/read`. It normalizes only safe
+rate-limit fields and never returns the raw account object or authentication
+material.
+
+The sidecar caches successful reads for 60 seconds, shares an in-flight refresh,
+and returns the last successful result as stale if a later refresh fails. It
+uses a short-lived app-server process with a timeout and forced cleanup. The
+Worker exposes `/api/codex/allowance`, applies the existing optional device
+authorization, and proxies the normalized sidecar response. This is a local
+host architecture; a deployed Cloudflare Worker cannot reach the user's
+loopback sidecar.
+
 ### Shared application state
 
 Contains semantic data needed by the renderer, such as:

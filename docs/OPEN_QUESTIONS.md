@@ -6,7 +6,6 @@ These items are deliberately unresolved. A coding agent must not silently choose
 
 ### Codex screen
 
-- What live source supplies Codex allowance remaining and its reset time?
 - What backend endpoint and refresh interval supply Codex activity and task data?
 - What values trigger warning or critical presentation?
 

@@ -7,6 +7,10 @@ HISTORY_API_TOKEN=your-history-api-token-here
 # ADMIN_API_TOKEN=your-admin-api-token-here
 # DEVICE_AUTH_TOKEN=your-device-auth-token-here
 
+# Local loopback sidecar started with: npm run codex:allowance
+# This process invokes the official Codex app-server and exposes sanitized rate limits only.
+CODEX_ALLOWANCE_BRIDGE_URL=http://127.0.0.1:8790
+
 # Optional: outbound email via Cloudflare Email Routing.
 # Required only if you uncommented the [[send_email]] block in wrangler.toml.
 # Note: wrangler dev does not actually deliver mail; deploy to test.
