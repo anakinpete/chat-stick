@@ -6,6 +6,8 @@
 #include <WebServer.h>
 #include <functional>
 
+class SettingsStore;
+
 /**
  * @brief Connects to known WiFi networks and hosts the provisioning portal.
  */
@@ -21,8 +23,11 @@ public:
    */
   void onLog(LogCallback callback) { _logCallback = callback; }
 
-  /// Initialize Preferences storage and load saved networks.
-  void init();
+  /**
+   * @brief Initialize legacy storage and attach the central settings store.
+   * @param settings Central persistent settings used by the setup portal.
+   */
+  void init(SettingsStore &settings);
 
   /**
    * @brief Prefer one validated settings-store network during connection.
@@ -136,6 +141,9 @@ private:
 
   /// Preferences namespace handle.
   Preferences _prefs;
+
+  /// Central settings destination used by portal submissions.
+  SettingsStore *_settings = nullptr;
 
   /// Valid saved-settings SSID to try before legacy and development networks.
   String _primarySsid;

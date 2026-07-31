@@ -71,7 +71,7 @@ void AppController::setup() {
   _powerManager.setSavedBrightness(_settings.brightness());
   configureCallbacks();
 
-  _wifi.init();
+  _wifi.init(_settings);
   _settings.applySavedWifi(_wifi);
 
   if (Board::capabilities().externalSpeakerGain) {

@@ -1,13 +1,51 @@
 #include "WiFiService.h"
 
 #include "Config.h"
+#include "SettingsStore.h"
 #include "credentials.h"
 #include <WiFi.h>
 #include <stdarg.h>
 #include <string.h>
 #include <time.h>
 
-void WiFiService::init() {
+namespace {
+String escapeHtml(const String &value) {
+  String escaped = value;
+  escaped.replace("&", "&amp;");
+  escaped.replace("<", "&lt;");
+  escaped.replace(">", "&gt;");
+  escaped.replace("\"", "&quot;");
+  escaped.replace("'", "&#39;");
+  return escaped;
+}
+
+bool parseBackendPort(const String &value, int &outPort) {
+  if (value.isEmpty()) {
+    return false;
+  }
+
+  uint32_t port = 0;
+  for (size_t i = 0; i < value.length(); i++) {
+    const char c = value.charAt(i);
+    if (c < '0' || c > '9') {
+      return false;
+    }
+    port = port * 10U + static_cast<uint32_t>(c - '0');
+    if (port > 65535U) {
+      return false;
+    }
+  }
+
+  if (port == 0) {
+    return false;
+  }
+  outPort = static_cast<int>(port);
+  return true;
+}
+} // namespace
+
+void WiFiService::init(SettingsStore &settings) {
+  _settings = &settings;
   _prefsReady = _prefs.begin(kPrefsNamespace, false);
   if (_prefsReady) {
     loadSavedNetworks();
@@ -521,31 +559,42 @@ void WiFiService::refreshScanResults() {
 
 String WiFiService::portalHtml(const String &message) const {
   String html;
-  html.reserve(2048);
+  html.reserve(2560);
   html += "<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>";
   html += "<title>chat-stick setup</title>";
   html += "<style>body{font-family:sans-serif;max-width:32rem;margin:2rem auto;padding:0 1rem;background:#111;color:#f5f5f5}";
   html += "form{display:grid;gap:.75rem}input,select,button{font:inherit;padding:.75rem;border-radius:.5rem;border:1px solid #444}";
   html += "button{background:#fff;color:#111;font-weight:700}small{color:#bbb}.msg{padding:.75rem;border-radius:.5rem;background:#1d3b24;color:#d7ffd7}</style></head><body>";
-  html += "<h1>chat-stick WiFi setup</h1>";
-  html += "<p>Join this device, then submit your WiFi credentials. The device will save them and reconnect automatically.</p>";
+  html += "<h1>chat-stick setup</h1>";
+  html += "<p>Configure WiFi and the backend address. The device will save the settings and reconnect automatically.</p>";
   if (!message.isEmpty()) {
     html += "<div class='msg'>";
-    html += message;
+    html += escapeHtml(message);
     html += "</div>";
   }
   html += "<form method='post' action='/save'>";
   html += "<label>Network<select name='ssid'><option value=''>Choose a network</option>";
   for (int i = 0; i < _scanResultCount; i++) {
+    const String escapedSsid = escapeHtml(_scanResults[i]);
     html += "<option value='";
-    html += _scanResults[i];
+    html += escapedSsid;
     html += "'>";
-    html += _scanResults[i];
+    html += escapedSsid;
     html += "</option>";
   }
   html += "</select></label>";
   html += "<label>Or enter SSID<input name='manual_ssid' placeholder='Network name'></label>";
   html += "<label>Password<input name='password' type='password' placeholder='Password'></label>";
+  html += "<label>Backend address<input name='backend_host' required value='";
+  if (_settings) {
+    html += escapeHtml(_settings->backendHost());
+  }
+  html += "'></label>";
+  html += "<label>Backend port<input name='backend_port' type='number' min='1' max='65535' required value='";
+  if (_settings) {
+    html += String(_settings->backendPort());
+  }
+  html += "'></label>";
   html += "<button type='submit'>Save and reconnect</button>";
   html += "</form><p><small>Portal IP: ";
   html += WiFi.softAPIP().toString();
@@ -561,9 +610,12 @@ void WiFiService::handlePortalSave() {
   String selectedSsid = _portalServer.arg("ssid");
   String manualSsid = _portalServer.arg("manual_ssid");
   String password = _portalServer.arg("password");
+  String backendHost = _portalServer.arg("backend_host");
+  String backendPortText = _portalServer.arg("backend_port");
   selectedSsid.trim();
   manualSsid.trim();
-  password.trim();
+  backendHost.trim();
+  backendPortText.trim();
   const String ssid = manualSsid.isEmpty() ? selectedSsid : manualSsid;
 
   if (ssid.isEmpty()) {
@@ -572,13 +624,52 @@ void WiFiService::handlePortalSave() {
     return;
   }
 
+  if (backendHost.isEmpty()) {
+    _portalServer.send(
+        400, "text/html",
+        portalHtml("Enter a backend address before saving."));
+    return;
+  }
+
+  int backendPort = 0;
+  if (!parseBackendPort(backendPortText, backendPort)) {
+    _portalServer.send(
+        400, "text/html",
+        portalHtml("Backend port must be a number from 1 to 65535."));
+    return;
+  }
+
+  if (!_settings) {
+    _portalServer.send(
+        500, "text/html",
+        portalHtml("Settings storage is unavailable. Nothing was saved."));
+    return;
+  }
+
+  if (!_settings->saveWifiCredentials(ssid, password)) {
+    _portalServer.send(
+        500, "text/html",
+        portalHtml("WiFi settings could not be saved. Please try again."));
+    return;
+  }
+
+  if (!_settings->saveBackend(backendHost, backendPort)) {
+    _portalServer.send(
+        500, "text/html",
+        portalHtml("WiFi was saved, but backend settings could not be saved. "
+                   "Check the values and try again."));
+    return;
+  }
+
+  _settings->applySavedWifi(*this);
   rememberNetwork(ssid, password, "Portal");
   _provisionedSsid = ssid;
   _portalProvisioned = true;
   _portalServer.send(
       200, "text/html",
-      portalHtml("Saved. Return to the device; it is reconnecting now."));
-  log("Captive portal saved credentials for %s", ssid.c_str());
+      portalHtml("WiFi and backend settings saved. Return to the device; it "
+                 "is reconnecting now."));
+  log("Captive portal saved WiFi and backend settings for %s", ssid.c_str());
 }
 
 void WiFiService::redirectToPortal() {
