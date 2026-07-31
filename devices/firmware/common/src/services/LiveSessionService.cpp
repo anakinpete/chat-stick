@@ -8,12 +8,69 @@
 #include <WiFiClient.h>
 #include <WiFiClientSecure.h>
 #include <stdarg.h>
+#include <stdio.h>
 
 using namespace websockets;
 
 namespace {
 /// Timeout for short HTTP metadata requests.
 constexpr uint16_t kHttpGetTimeoutMs = 3000;
+
+int64_t daysFromCivil(int year, unsigned month, unsigned day) {
+  year -= month <= 2;
+  const int era = (year >= 0 ? year : year - 399) / 400;
+  const unsigned yearOfEra = static_cast<unsigned>(year - era * 400);
+  const unsigned dayOfYear =
+      (153 * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1;
+  const unsigned dayOfEra =
+      yearOfEra * 365 + yearOfEra / 4 - yearOfEra / 100 + dayOfYear;
+  return static_cast<int64_t>(era) * 146097 +
+         static_cast<int64_t>(dayOfEra) - 719468;
+}
+
+bool isLeapYear(int year) {
+  return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+}
+
+bool parseUtcIso8601(const char *value, int64_t &unixSeconds) {
+  unixSeconds = 0;
+  if (!value) return false;
+
+  int year = 0;
+  int month = 0;
+  int day = 0;
+  int hour = 0;
+  int minute = 0;
+  int second = 0;
+  if (sscanf(value, "%4d-%2d-%2dT%2d:%2d:%2d", &year, &month, &day,
+             &hour, &minute, &second) != 6) {
+    return false;
+  }
+
+  const char *suffix = value + 19;
+  if (*suffix == '.') {
+    suffix++;
+    if (*suffix < '0' || *suffix > '9') return false;
+    while (*suffix >= '0' && *suffix <= '9') suffix++;
+  }
+  if (*suffix != 'Z' || suffix[1] != '\0') return false;
+
+  static constexpr uint8_t daysPerMonth[] = {31, 28, 31, 30, 31, 30,
+                                              31, 31, 30, 31, 30, 31};
+  if (year < 1970 || month < 1 || month > 12 || hour < 0 || hour > 23 ||
+      minute < 0 || minute > 59 || second < 0 || second > 59) {
+    return false;
+  }
+  const int maxDay = daysPerMonth[month - 1] +
+                     ((month == 2 && isLeapYear(year)) ? 1 : 0);
+  if (day < 1 || day > maxDay) return false;
+
+  unixSeconds = daysFromCivil(year, static_cast<unsigned>(month),
+                              static_cast<unsigned>(day)) *
+                    86400 +
+                hour * 3600 + minute * 60 + second;
+  return true;
+}
 
 /**
  * @brief Whether a device-auth token is compiled into credentials.h.
@@ -644,6 +701,96 @@ bool LiveSessionService::checkFirmwareUpdate(FirmwareUpdateInfo &outInfo) {
         outInfo.latestVersion = doc["latest_version"] | FIRMWARE_VERSION;
         outInfo.notes = doc["notes"] | "";
         outInfo.downloadUrl = doc["download_url"] | "";
+        return HttpGetDecision::Success;
+      });
+}
+
+/**
+ * @brief Fetch and select one displayable Codex allowance window.
+ *
+ * The backend remains generic and may return several limit buckets/windows.
+ * The small display prefers Codex's primary window, then the first window with
+ * a valid remaining percentage.
+ */
+bool LiveSessionService::fetchCodexAllowance(CodexAllowanceInfo &outInfo) {
+  outInfo = CodexAllowanceInfo{};
+
+  return getFromConfiguredEndpoints(
+      "fetching Codex allowance from",
+      [this](const ServerEndpoint &endpoint) {
+        return endpointBaseUrl(endpoint) +
+               "/api/codex/allowance?device_id=" + DEVICE_ID;
+      },
+      [this, &outInfo](const HttpGetResponse &response) {
+        if (response.body.isEmpty()) {
+          logClient("HTTP", "Codex allowance failed status=%d",
+                    response.statusCode);
+          return HttpGetDecision::Continue;
+        }
+
+        JsonDocument doc;
+        if (deserializeJson(doc, response.body) || !doc.is<JsonObject>()) {
+          logClient("HTTP", "Codex allowance response invalid");
+          return HttpGetDecision::Continue;
+        }
+
+        const char *source = doc["source"] | "";
+        const char *state = doc["state"] | "";
+        if (strcmp(source, "codex-app-server") != 0 || !state[0] ||
+            !doc["available"].is<bool>() || !doc["windows"].is<JsonArray>() ||
+            !doc["stale"].is<bool>()) {
+          logClient("HTTP", "Codex allowance schema invalid");
+          return HttpGetDecision::Continue;
+        }
+
+        if (strcmp(state, "unauthenticated") == 0) {
+          outInfo.state = CodexAllowanceInfo::State::Unauthenticated;
+        } else if (doc["stale"].as<bool>() || strcmp(state, "stale") == 0) {
+          outInfo.state = CodexAllowanceInfo::State::Stale;
+        } else if (doc["available"].as<bool>() &&
+                   strcmp(state, "available") == 0) {
+          outInfo.state = CodexAllowanceInfo::State::Available;
+        } else {
+          outInfo.state = CodexAllowanceInfo::State::Unavailable;
+        }
+
+        JsonVariant selected;
+        for (JsonVariant window : doc["windows"].as<JsonArray>()) {
+          if (!window["remainingPercent"].is<int>()) continue;
+          const int remaining = window["remainingPercent"].as<int>();
+          if (remaining < 0 || remaining > 100) continue;
+          if (selected.isNull()) selected = window;
+
+          const char *limitId = window["limitId"] | "";
+          const char *kind = window["kind"] | "";
+          if (strcmp(limitId, "codex") == 0 &&
+              strcmp(kind, "primary") == 0) {
+            selected = window;
+            break;
+          }
+        }
+
+        if (!selected.isNull()) {
+          outInfo.remainingKnown = true;
+          outInfo.remainingPercent = static_cast<uint8_t>(
+              selected["remainingPercent"].as<int>());
+          outInfo.windowLabel = selected["label"] | "";
+
+          int64_t reset = 0;
+          if (parseUtcIso8601(selected["resetsAt"], reset)) {
+            outInfo.resetKnown = true;
+            outInfo.resetsAtUnixSeconds = reset;
+          }
+        }
+
+        int64_t updated = 0;
+        if (parseUtcIso8601(doc["updatedAt"], updated)) {
+          outInfo.updatedKnown = true;
+          outInfo.updatedAtUnixSeconds = updated;
+        }
+
+        // Valid safe payloads include 401/503 unavailable states. Accept them
+        // so the UI can distinguish provider state without exposing errors.
         return HttpGetDecision::Success;
       });
 }

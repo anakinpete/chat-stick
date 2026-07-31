@@ -37,8 +37,10 @@ The MVP has two main information screens with a shared header:
 Codex allowance windows come from the locally installed official Codex
 app-server through the trusted local backend. The allowance model supports
 generic multiple windows, honest missing values, reset timestamps, and stale
-cached data. Codex activity, task title, and elapsed task timing remain a
-separate integration concern.
+cached data. Firmware displays the primary Codex window and converts its reset
+instant through the same UK DST-aware local-time path as the header clock.
+Codex activity, task title, and elapsed task timing remain a separate
+integration concern.
 
 ### Screen 2 — Meeting / agenda
 

@@ -19,7 +19,8 @@ These items are deliberately unresolved. A coding agent must not silently choose
 
 - Which weather provider is used?
 - Is location entered manually, derived from the backend, or selected in the setup portal?
-- How is timezone configured?
+- Should the current UK DST-aware firmware timezone become user-configurable
+  for deployments outside the UK?
 
 ## Controls
 

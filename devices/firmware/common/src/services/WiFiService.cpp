@@ -468,7 +468,6 @@ bool WiFiService::connectToNetwork(const String &ssid, const String &password,
           WiFi.localIP().toString().c_str());
     }
     WiFi.setSleep(WIFI_PS_MIN_MODEM);
-    configTime(0, 0, NTP_SERVER);
     return true;
   }
 

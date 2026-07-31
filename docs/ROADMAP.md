@@ -114,8 +114,10 @@ Integrate the agreed core data sources:
 Codex allowance backend integration is implemented through the official local
 Codex app-server. The local sidecar and `/api/codex/allowance` endpoint now
 provide generic cached windows with stale/error states and no authentication
-material. Firmware consumption is intentionally deferred; Codex activity,
-task title, and elapsed task time remain Task 8B work.
+material. Firmware consumption now polls the primary Codex window in the
+background and feeds its remaining percentage and locally formatted reset time
+into the shared optional UI fields. Codex activity, task title, and elapsed
+task time remain Task 8B work.
 
 Then improve:
 

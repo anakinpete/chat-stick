@@ -143,6 +143,22 @@ struct FirmwareUpdateInfo {
 };
 
 /**
+ * @brief Safe normalized Codex allowance data returned by the local backend.
+ */
+struct CodexAllowanceInfo {
+  enum class State { Unknown, Available, Stale, Unavailable, Unauthenticated };
+
+  State state = State::Unknown;
+  bool remainingKnown = false;
+  uint8_t remainingPercent = 0;
+  bool resetKnown = false;
+  int64_t resetsAtUnixSeconds = 0;
+  bool updatedKnown = false;
+  int64_t updatedAtUnixSeconds = 0;
+  String windowLabel;
+};
+
+/**
  * @brief Maintains the device-side WebSocket session with the chat server.
  */
 class LiveSessionService {
@@ -246,6 +262,13 @@ public:
    * @return True on successful request parsing.
    */
   bool checkFirmwareUpdate(FirmwareUpdateInfo &outInfo);
+
+  /**
+   * @brief Fetch the preferred Codex allowance window from the backend.
+   * @param outInfo Receives normalized, non-sensitive allowance data.
+   * @return True when the backend returned a valid normalized payload.
+   */
+  bool fetchCodexAllowance(CodexAllowanceInfo &outInfo);
 
   /**
    * @brief Download and apply an OTA firmware update.

@@ -215,3 +215,19 @@ authentication material are never returned.
 **Reason:** Reuse the official authenticated local boundary while keeping the
 device contract generic, cacheable, failure-tolerant, and secret-safe. Codex
 activity state and elapsed task time remain separate Task 8B work.
+
+## ADR-023 — Firmware displays the primary Codex allowance window
+
+**Decision:** Poll the normalized allowance endpoint every 60 seconds from a
+background firmware task. Prefer the `codex` primary window, with the first
+valid generic window as a compatibility fallback. Display its remaining
+percentage and reset instant through the existing optional UI fields; retain a
+last valid result as stale after refresh failure.
+
+NTP remains UTC. For the current UK deployment, configure one process-wide
+POSIX timezone rule, `GMT0BST,M3.5.0/1,M10.5.0`, and use the same local-time
+conversion for the device clock and allowance reset times.
+
+**Reason:** The small screen can present one honest, stable allowance value
+without constraining the backend's multi-window contract, while UK daylight
+saving changes remain automatic rather than a permanent one-hour offset.

@@ -82,7 +82,7 @@ constexpr gpio_num_t BUTTON_B_PIN = GPIO_NUM_12;
 
 // ============= Clock =============
 constexpr const char *NTP_SERVER = "pool.ntp.org";
-constexpr const char *LOCAL_TZ = "PST8PDT,M3.2.0,M11.1.0";
+constexpr const char *LOCAL_TZ = "GMT0BST,M3.5.0/1,M10.5.0";
 
 // ============= Timers / Alarms =============
 constexpr int MAX_TIMERS = 4;

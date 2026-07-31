@@ -30,9 +30,6 @@ CompanionDemoData::update(const CompanionRuntimeSignals &signals,
     _model.codex.currentTaskTitle =
         "Build the plain two-screen companion renderer";
     _model.codex.taskProgressPercentage = PercentageValue::from(68);
-    _model.codex.allowanceAvailability = DataAvailability::Unavailable;
-    _model.codex.allowanceRemainingPercentage = PercentageValue::unknown();
-
     _model.meeting.title =
         "M5 Sci-Fi Companion architecture and hardware review";
     _model.meeting.locationType = MeetingLocationType::VideoCall;
@@ -53,6 +50,12 @@ CompanionDemoData::update(const CompanionRuntimeSignals &signals,
   _model.header.batteryPercentage =
       PercentageValue::from(signals.batteryPercentage);
   _model.header.connection = connectionState(signals);
+  _model.codex.allowanceAvailability = signals.allowanceAvailability;
+  _model.codex.allowanceRemainingPercentage =
+      signals.allowanceRemainingPercentage;
+  _model.codex.allowanceResetUnixSeconds =
+      signals.allowanceResetUnixSeconds;
+  _model.codex.allowanceResetText = "";
 
   if (signals.backendConnected) {
     _model.codex.availability = DataAvailability::Available;
@@ -67,7 +70,10 @@ CompanionDemoData::update(const CompanionRuntimeSignals &signals,
     _model.codex.activity = CodexActivityState::Unavailable;
     _model.codex.severity = UiSeverity::Error;
   }
-  if (_model.header.currentTimeUnixSeconds.known) {
+  if (signals.allowanceUpdatedUnixSeconds.known) {
+    _model.codex.lastUpdateUnixSeconds =
+        signals.allowanceUpdatedUnixSeconds;
+  } else if (_model.header.currentTimeUnixSeconds.known) {
     _model.codex.lastUpdateUnixSeconds =
         _model.header.currentTimeUnixSeconds;
   } else {

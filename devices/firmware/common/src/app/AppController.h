@@ -109,6 +109,9 @@ private:
   /// Stack size used by short-lived menu fetch tasks.
   static constexpr uint32_t kMenuFetchTaskStack = 8192;
 
+  /// Refresh cadence matching the local backend allowance cache.
+  static constexpr unsigned long kCodexAllowanceRefreshMs = 60000;
+
   /// Maximum expired timers to handle in one loop pass.
   static constexpr int kMaxExpiredPerWake = MAX_TIMERS;
 
@@ -286,6 +289,24 @@ private:
   /// Background task result for firmware update checks.
   FirmwareUpdateInfo _firmwareFetchInfo;
 
+  /// Most recently accepted Codex allowance value.
+  CodexAllowanceInfo _codexAllowanceInfo;
+
+  /// Result buffer written by the background allowance request.
+  CodexAllowanceInfo _allowanceFetchInfo;
+
+  /// Current UI availability of the allowance provider.
+  DataAvailability _allowanceAvailability = DataAvailability::Unknown;
+
+  /// Whether a previously valid allowance value can be shown stale.
+  bool _hasCodexAllowance = false;
+
+  /// Whether the background allowance request parsed a backend response.
+  bool _allowanceFetchOk = false;
+
+  /// Whether the background allowance request has completed.
+  volatile bool _allowanceFetchDone = false;
+
   /// Whether the background firmware check succeeded.
   bool _firmwareFetchOk = false;
 
@@ -342,6 +363,15 @@ private:
 
   /// Active background task for checking firmware updates.
   TaskHandle_t _firmwareFetchTask = nullptr;
+
+  /// Active background task for refreshing Codex allowance data.
+  TaskHandle_t _allowanceFetchTask = nullptr;
+
+  /// Timestamp when the last Codex allowance refresh was started.
+  unsigned long _lastAllowanceFetchMs = 0;
+
+  /// Whether at least one allowance refresh has been attempted this boot.
+  bool _allowanceFetchStarted = false;
 
   /// Timestamp of the last power-management poll.
   unsigned long _lastPowerPollMs = 0;
@@ -528,6 +558,18 @@ private:
 
   /// Schedule non-blocking companion animation frames.
   void processCompanionUi();
+
+  /// Start a due Codex allowance refresh without blocking the main loop.
+  void processCodexAllowance();
+
+  /// Background worker body for the allowance endpoint request.
+  void codexAllowanceFetchTask();
+
+  /// FreeRTOS trampoline for codexAllowanceFetchTask().
+  static void codexAllowanceFetchTaskTrampoline(void *ctx);
+
+  /// Apply a finished allowance request to the UI-facing cache.
+  void finishCodexAllowanceFetch();
 
   /// Render the UI when needed.
   void renderIfNeeded();

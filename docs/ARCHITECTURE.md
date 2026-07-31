@@ -70,6 +70,17 @@ authorization, and proxies the normalized sidecar response. This is a local
 host architecture; a deployed Cloudflare Worker cannot reach the user's
 loopback sidecar.
 
+The firmware polls that endpoint in a short-lived background task on the same
+60-second cadence. It prefers the normalized `codex` primary window and falls
+back to the first valid generic window. Only the remaining percentage, reset
+instant, provider update instant, and availability/stale state cross into the
+shared UI model. Failed refreshes preserve a prior value as stale.
+
+NTP supplies UTC. Firmware configures the process timezone once with the UK
+POSIX rule `GMT0BST,M3.5.0/1,M10.5.0`; the header clock and allowance reset
+time both use the same `localtime_r` conversion, including automatic BST/GMT
+transitions.
+
 ### Shared application state
 
 Contains semantic data needed by the renderer, such as:

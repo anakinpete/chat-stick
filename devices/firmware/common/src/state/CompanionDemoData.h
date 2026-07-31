@@ -12,6 +12,12 @@ struct CompanionRuntimeSignals {
   bool wifiConnected = false;
   bool backendConnected = false;
   bool backendConnecting = false;
+  DataAvailability allowanceAvailability = DataAvailability::Unknown;
+  PercentageValue allowanceRemainingPercentage = PercentageValue::unknown();
+  OptionalValue<int64_t> allowanceResetUnixSeconds =
+      OptionalValue<int64_t>::unknown();
+  OptionalValue<int64_t> allowanceUpdatedUnixSeconds =
+      OptionalValue<int64_t>::unknown();
 };
 
 /**

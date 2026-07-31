@@ -31,6 +31,9 @@ const char *deepSleepWakeReasonName(DeepSleepWakeReason reason) {
 
 void AppController::setup() {
   Serial.begin(115200);
+  // configTzTime starts UTC-backed SNTP, sets TZ, and calls tzset(). Do this
+  // before logging or rendering can convert a retained/valid clock value.
+  configTzTime(LOCAL_TZ, NTP_SERVER);
   if (Board::capabilities().bootDisplay) {
     Log::setSink(&AppController::bootLogTrampoline, this);
   }
@@ -40,9 +43,6 @@ void AppController::setup() {
   Board::init();
   setCpuFrequencyMhz(CPU_ACTIVE_MHZ);
   Log::client("Setup", "CPU clock set to %lu MHz", getCpuFrequencyMhz());
-
-  setenv("TZ", LOCAL_TZ, 1);
-  tzset();
 
   _settings.init();
   _themeManager.init(_settings);
@@ -1861,6 +1861,10 @@ void AppController::processMenuFetches() {
   if (_firmwareFetchTask != nullptr && _firmwareFetchDone) {
     finishFirmwareUpdateCheck();
   }
+
+  if (_allowanceFetchTask != nullptr && _allowanceFetchDone) {
+    finishCodexAllowanceFetch();
+  }
 }
 
 void AppController::processPower() {
@@ -1886,9 +1890,97 @@ void AppController::processCaptivePortal() {
 }
 
 void AppController::processCompanionUi() {
+  processCodexAllowance();
   if (shouldRenderCompanion() && _display.companionNeedsFrame(millis())) {
     _screenDirty = true;
   }
+}
+
+void AppController::processCodexAllowance() {
+  if (!shouldRenderCompanion() || !_wifi.isConnected() ||
+      _allowanceFetchTask != nullptr) {
+    if (!_wifi.isConnected() && _allowanceFetchTask == nullptr) {
+      _allowanceAvailability = _hasCodexAllowance
+                                    ? DataAvailability::Stale
+                                    : DataAvailability::Unavailable;
+    }
+    return;
+  }
+
+  const unsigned long now = millis();
+  if (_allowanceFetchStarted &&
+      now - _lastAllowanceFetchMs < kCodexAllowanceRefreshMs) {
+    return;
+  }
+
+  _allowanceFetchStarted = true;
+  _lastAllowanceFetchMs = now;
+  _allowanceFetchDone = false;
+  _allowanceFetchOk = false;
+  _allowanceFetchInfo = CodexAllowanceInfo{};
+  if (!_hasCodexAllowance) {
+    _allowanceAvailability = DataAvailability::Loading;
+  }
+
+  const BaseType_t ok = xTaskCreatePinnedToCore(
+      &AppController::codexAllowanceFetchTaskTrampoline, "codex_limit",
+      kMenuFetchTaskStack, this, 1, &_allowanceFetchTask, 1);
+  if (ok != pdPASS) {
+    _allowanceFetchTask = nullptr;
+    _allowanceAvailability = _hasCodexAllowance ? DataAvailability::Stale
+                                                 : DataAvailability::Error;
+    Log::client("Codex", "failed to start allowance fetch task");
+  }
+  _screenDirty = true;
+}
+
+void AppController::codexAllowanceFetchTaskTrampoline(void *ctx) {
+  static_cast<AppController *>(ctx)->codexAllowanceFetchTask();
+}
+
+void AppController::codexAllowanceFetchTask() {
+  _allowanceFetchOk = _live.fetchCodexAllowance(_allowanceFetchInfo);
+  _allowanceFetchDone = true;
+  vTaskDelete(nullptr);
+}
+
+void AppController::finishCodexAllowanceFetch() {
+  _allowanceFetchTask = nullptr;
+
+  if (!_allowanceFetchOk) {
+    _allowanceAvailability = _hasCodexAllowance ? DataAvailability::Stale
+                                                 : DataAvailability::Error;
+    _screenDirty = true;
+    return;
+  }
+
+  if (_allowanceFetchInfo.remainingKnown) {
+    _codexAllowanceInfo = _allowanceFetchInfo;
+    _hasCodexAllowance = true;
+  }
+
+  switch (_allowanceFetchInfo.state) {
+  case CodexAllowanceInfo::State::Available:
+    _allowanceAvailability = _allowanceFetchInfo.remainingKnown
+                                 ? DataAvailability::Available
+                                 : (_hasCodexAllowance
+                                        ? DataAvailability::Stale
+                                        : DataAvailability::Unavailable);
+    break;
+  case CodexAllowanceInfo::State::Stale:
+    _allowanceAvailability = _hasCodexAllowance ? DataAvailability::Stale
+                                                 : DataAvailability::Unavailable;
+    break;
+  case CodexAllowanceInfo::State::Unauthenticated:
+  case CodexAllowanceInfo::State::Unavailable:
+  case CodexAllowanceInfo::State::Unknown:
+  default:
+    _allowanceAvailability = _hasCodexAllowance ? DataAvailability::Stale
+                                                 : DataAvailability::Unavailable;
+    break;
+  }
+
+  _screenDirty = true;
 }
 
 bool AppController::shouldRenderCompanion() const {
@@ -1904,6 +1996,19 @@ const CompanionUiModel &AppController::buildCompanionUi() {
   signals.backendConnected = _live.isConnected();
   signals.backendConnecting =
       _networkStackStarted && signals.wifiConnected && !signals.backendConnected;
+  signals.allowanceAvailability = _allowanceAvailability;
+  if (_hasCodexAllowance) {
+    signals.allowanceRemainingPercentage =
+        PercentageValue::from(_codexAllowanceInfo.remainingPercent);
+    if (_codexAllowanceInfo.resetKnown) {
+      signals.allowanceResetUnixSeconds = OptionalValue<int64_t>::from(
+          _codexAllowanceInfo.resetsAtUnixSeconds);
+    }
+    if (_codexAllowanceInfo.updatedKnown) {
+      signals.allowanceUpdatedUnixSeconds = OptionalValue<int64_t>::from(
+          _codexAllowanceInfo.updatedAtUnixSeconds);
+    }
+  }
   return _companionDemoData.update(signals, _activePrimaryScreen);
 }
 

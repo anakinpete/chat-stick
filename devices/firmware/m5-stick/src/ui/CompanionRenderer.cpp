@@ -22,6 +22,28 @@ void formatTime(const OptionalValue<int64_t> &value, char *buffer,
   snprintf(buffer, bufferSize, "%02d:%02d", local.tm_hour, local.tm_min);
 }
 
+bool formatResetDateTime(const OptionalValue<int64_t> &value,
+                         char *dateBuffer, size_t dateBufferSize,
+                         char *timeBuffer, size_t timeBufferSize) {
+  if (!value.known) return false;
+
+  const time_t instant = static_cast<time_t>(value.value);
+  struct tm local;
+  if (!localtime_r(&instant, &local) || local.tm_mon < 0 ||
+      local.tm_mon > 11) {
+    return false;
+  }
+
+  static constexpr const char *months[] = {
+      "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+      "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
+  snprintf(dateBuffer, dateBufferSize, "%02d %s", local.tm_mday,
+           months[local.tm_mon]);
+  snprintf(timeBuffer, timeBufferSize, "%02d:%02d", local.tm_hour,
+           local.tm_min);
+  return true;
+}
+
 void formatPercentage(const PercentageValue &value, char *buffer,
                       size_t bufferSize) {
   if (!value.known) {
@@ -207,7 +229,8 @@ void CompanionRenderer::drawStackedCodexScreen(
 
   char allowanceValue[8];
   const bool allowanceKnown =
-      codex.allowanceAvailability == DataAvailability::Available &&
+      (codex.allowanceAvailability == DataAvailability::Available ||
+       codex.allowanceAvailability == DataAvailability::Stale) &&
       codex.allowanceRemainingPercentage.known;
   if (allowanceKnown) {
     formatPercentage(codex.allowanceRemainingPercentage, allowanceValue,
@@ -234,6 +257,8 @@ void CompanionRenderer::drawStackedCodexScreen(
                           theme.palette.secondary, theme);
   }
 
+  bool resetUsesSecondLine = false;
+  char resetLocalTime[8] = "";
   if (allowanceKnown && !codex.allowanceResetText.isEmpty()) {
     drawText(canvas, canvasReady, contentX, 196, "RESET",
              theme.palette.muted);
@@ -241,21 +266,32 @@ void CompanionRenderer::drawStackedCodexScreen(
                     contentWidth - 48, codex.allowanceResetText, 0,
                     theme.palette.info);
   } else if (allowanceKnown && codex.allowanceResetUnixSeconds.known) {
-    char resetTime[8];
-    formatTime(codex.allowanceResetUnixSeconds, resetTime,
-               sizeof(resetTime));
-    drawText(canvas, canvasReady, contentX, 196, "RESET",
-             theme.palette.muted);
-    drawText(canvas, canvasReady, contentX + 48, 196, resetTime,
-             theme.palette.info);
+    char resetDate[8];
+    if (formatResetDateTime(codex.allowanceResetUnixSeconds, resetDate,
+                            sizeof(resetDate), resetLocalTime,
+                            sizeof(resetLocalTime))) {
+      drawText(canvas, canvasReady, contentX, 196, "RESET",
+               theme.palette.muted);
+      drawText(canvas, canvasReady, contentX + 48, 196, resetDate,
+               theme.palette.info);
+      resetUsesSecondLine = true;
+    }
   }
 
   char updated[8];
   formatTime(codex.lastUpdateUnixSeconds, updated, sizeof(updated));
   char updatedLabel[20];
-  snprintf(updatedLabel, sizeof(updatedLabel), "UPDATED %s", updated);
-  drawText(canvas, canvasReady, contentX, 212, updatedLabel,
-           theme.palette.muted);
+  if (resetUsesSecondLine) {
+    drawText(canvas, canvasReady, contentX, 212, resetLocalTime,
+             theme.palette.info);
+    snprintf(updatedLabel, sizeof(updatedLabel), "UP%s", updated);
+    drawText(canvas, canvasReady, contentX + 48, 212, updatedLabel,
+             theme.palette.muted);
+  } else {
+    snprintf(updatedLabel, sizeof(updatedLabel), "UPDATED %s", updated);
+    drawText(canvas, canvasReady, contentX, 212, updatedLabel,
+             theme.palette.muted);
+  }
 }
 
 void CompanionRenderer::drawStackedMeetingScreen(
@@ -472,8 +508,11 @@ void CompanionRenderer::drawCodexScreen(M5Canvas &canvas, bool canvasReady,
   char allowancePercent[8];
   formatPercentage(codex.taskProgressPercentage, taskPercent,
                    sizeof(taskPercent));
-  if (codex.allowanceAvailability == DataAvailability::Available &&
-      codex.allowanceRemainingPercentage.known) {
+  const bool allowanceKnown =
+      (codex.allowanceAvailability == DataAvailability::Available ||
+       codex.allowanceAvailability == DataAvailability::Stale) &&
+      codex.allowanceRemainingPercentage.known;
+  if (allowanceKnown) {
     formatPercentage(codex.allowanceRemainingPercentage, allowancePercent,
                      sizeof(allowancePercent));
   } else {
@@ -482,20 +521,28 @@ void CompanionRenderer::drawCodexScreen(M5Canvas &canvas, bool canvasReady,
   char metrics[32];
   snprintf(metrics, sizeof(metrics), "TASK %s  ALLOWANCE %s", taskPercent,
            allowancePercent);
-  drawText(canvas, canvasReady, 4, 56, metrics, theme.palette.primary);
+  drawText(canvas, canvasReady, 4, 56, metrics,
+           codex.allowanceAvailability == DataAvailability::Stale
+               ? theme.palette.warning
+               : theme.palette.primary);
 
-  char resetTime[8];
-  if (codex.allowanceAvailability == DataAvailability::Available &&
-      !codex.allowanceResetText.isEmpty()) {
+  if (allowanceKnown && !codex.allowanceResetText.isEmpty()) {
     drawText(canvas, canvasReady, 4, 76, "RESET", theme.palette.muted);
     drawClippedText(canvas, canvasReady, 52, 76, 184,
                     codex.allowanceResetText, 0, theme.palette.secondary);
-  } else if (codex.allowanceAvailability == DataAvailability::Available &&
-             codex.allowanceResetUnixSeconds.known) {
-    drawText(canvas, canvasReady, 4, 76, "RESET", theme.palette.muted);
-    formatTime(codex.allowanceResetUnixSeconds, resetTime, sizeof(resetTime));
-    drawText(canvas, canvasReady, 52, 76, resetTime,
-             theme.palette.secondary);
+  } else if (allowanceKnown && codex.allowanceResetUnixSeconds.known) {
+    char resetDate[8];
+    char resetTime[8];
+    if (formatResetDateTime(codex.allowanceResetUnixSeconds, resetDate,
+                            sizeof(resetDate), resetTime,
+                            sizeof(resetTime))) {
+      char resetDateTime[16];
+      snprintf(resetDateTime, sizeof(resetDateTime), "%s %s", resetDate,
+               resetTime);
+      drawText(canvas, canvasReady, 4, 76, "RESET", theme.palette.muted);
+      drawText(canvas, canvasReady, 52, 76, resetDateTime,
+               theme.palette.secondary);
+    }
   } else if (codex.allowanceAvailability == DataAvailability::Loading) {
     drawText(canvas, canvasReady, 4, 76, "ALLOWANCE LOADING",
              theme.palette.info);
