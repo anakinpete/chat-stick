@@ -9,7 +9,7 @@ HISTORY_API_TOKEN=your-history-api-token-here
 
 # Local loopback sidecar started with: npm run codex:allowance
 # This process invokes the official Codex app-server and exposes sanitized rate limits only.
-CODEX_ALLOWANCE_BRIDGE_URL=http://127.0.0.1:8790
+CODEX_ALLOWANCE_BRIDGE_URL=http://localhost:8790/allowance
 
 # Optional: outbound email via Cloudflare Email Routing.
 # Required only if you uncommented the [[send_email]] block in wrangler.toml.

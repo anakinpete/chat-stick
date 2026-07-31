@@ -6,7 +6,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "codex:allowance": "node local/codex-allowance-bridge.mjs",
-    "test:codex-allowance": "node --test local/codex-allowance.test.mjs"
+    "test:codex-allowance": "node --test local/*codex-allowance*.test.mjs"
   },
   "dependencies": {
     "mimetext": "^3.0.28",

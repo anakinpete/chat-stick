@@ -1,5 +1,6 @@
 import { LiveSession } from './live-session'
 import { indexDocs, vectorSearch } from './docs-search'
+import { fetchCodexAllowanceBridge } from './codex-allowance-proxy'
 
 export { LiveSession }
 
@@ -226,38 +227,11 @@ export default {
 }
 
 async function proxyCodexAllowance(env: Env): Promise<Response> {
-	const bridgeUrl = (env.CODEX_ALLOWANCE_BRIDGE_URL || 'http://127.0.0.1:8790').replace(/\/$/, '')
-	const controller = new AbortController()
-	const timeout = setTimeout(() => controller.abort(), 12_000)
-
-	try {
-		const response = await fetch(`${bridgeUrl}/allowance`, {
-			headers: { Accept: 'application/json' },
-			signal: controller.signal,
-		})
-		const payload = await response.json<unknown>()
-		return json(payload, {
-			status: response.status,
-			headers: { 'Cache-Control': 'no-store' },
-		})
-	} catch {
-		return json(
-			{
-				available: false,
-				state: 'unavailable',
-				source: 'codex-app-server',
-				windows: [],
-				credits: { available: false, hasCredits: null, unlimited: null, balance: null },
-				rateLimitResetCredits: { available: false, availableCount: null },
-				updatedAt: new Date().toISOString(),
-				stale: false,
-				error: { code: 'bridge_unavailable' },
-			},
-			{ status: 503, headers: { 'Cache-Control': 'no-store' } }
-		)
-	} finally {
-		clearTimeout(timeout)
-	}
+	const result = await fetchCodexAllowanceBridge(env.CODEX_ALLOWANCE_BRIDGE_URL)
+	return json(result.payload, {
+		status: result.status,
+		headers: { 'Cache-Control': 'no-store' },
+	})
 }
 
 function corsHeaders(): HeadersInit {
