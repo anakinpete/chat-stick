@@ -68,6 +68,10 @@ void formatDuration(uint32_t seconds, const char *suffix, char *buffer,
   }
 }
 
+int measureTextWidth(M5Canvas &canvas, bool canvasReady, const char *text) {
+  return canvasReady ? canvas.textWidth(text) : M5.Display.textWidth(text);
+}
+
 } // namespace
 
 void CompanionRenderer::render(M5Canvas &canvas, bool canvasReady,
@@ -129,11 +133,14 @@ void CompanionRenderer::drawStackedHeader(M5Canvas &canvas, bool canvasReady,
                                            const HeaderData &header,
                                            const ThemeStyle &theme) const {
   const int width = displayWidth(canvas, canvasReady);
-  drawThemeMark(canvas, canvasReady, 5, 1, theme);
+  const int edge = theme.spacing.edgeInsetPx;
+  drawThemeMark(canvas, canvasReady, edge, 0, theme);
 
   char timeText[8];
   formatTime(header.currentTimeUnixSeconds, timeText, sizeof(timeText));
-  drawText(canvas, canvasReady, width - 45, 1, timeText,
+  const int timeX = width - edge -
+                    measureTextWidth(canvas, canvasReady, timeText);
+  drawText(canvas, canvasReady, timeX, 0, timeText,
            theme.palette.primary);
 
   char weatherText[14];
@@ -144,31 +151,43 @@ void CompanionRenderer::drawStackedHeader(M5Canvas &canvas, bool canvasReady,
                               TemperatureUnit::Fahrenheit
                           ? 'F'
                           : 'C';
-    snprintf(weatherText, sizeof(weatherText), "%s %.0f%c",
+    snprintf(weatherText, sizeof(weatherText), "%s%.0f%c",
              SemanticPresentation::weatherSymbol(theme,
                                                    header.weather.condition),
              header.weather.temperature.value, unit);
   } else {
-    snprintf(weatherText, sizeof(weatherText), "%s --",
+    snprintf(weatherText, sizeof(weatherText), "%s--",
              theme.symbols.weatherUnknown);
   }
-  drawText(canvas, canvasReady, 5, 18, weatherText,
-           theme.palette.info);
 
-  drawBatteryIcon(canvas, canvasReady, 55, 21, theme.palette.info);
   char batteryText[8];
   formatPercentage(header.batteryPercentage, batteryText,
                    sizeof(batteryText));
-  drawText(canvas, canvasReady, 72, 18, batteryText,
-           theme.palette.primary);
 
   const char *connection =
       SemanticPresentation::connectionLabel(header.connection);
-  const int connectionX =
-      max(5, width - 5 - static_cast<int>(strlen(connection)) * 8);
-  drawText(canvas, canvasReady, connectionX, 34, connection,
+  const int rowEdge = 1;
+  const int weatherWidth =
+      measureTextWidth(canvas, canvasReady, weatherText);
+  const int batteryTextWidth =
+      measureTextWidth(canvas, canvasReady, batteryText);
+  const int batteryGroupWidth = 11 + batteryTextWidth;
+  const int connectionWidth =
+      measureTextWidth(canvas, canvasReady, connection);
+  const int connectionX = width - rowEdge - connectionWidth;
+  const int batteryMinX = rowEdge + weatherWidth + 1;
+  const int batteryMaxX = connectionX - batteryGroupWidth - 1;
+  const int batteryX =
+      min(batteryMaxX, max(batteryMinX, (width - batteryGroupWidth) / 2));
+
+  drawText(canvas, canvasReady, rowEdge, 18, weatherText,
+           theme.palette.info);
+  drawBatteryIcon(canvas, canvasReady, batteryX, 21, theme.palette.info);
+  drawText(canvas, canvasReady, batteryX + 11, 18, batteryText,
+           theme.palette.primary);
+  drawText(canvas, canvasReady, connectionX, 18, connection,
            SemanticPresentation::connectionColor(theme, header.connection));
-  drawHorizontalLine(canvas, canvasReady, 49, theme.palette.secondary,
+  drawHorizontalLine(canvas, canvasReady, 37, theme.palette.secondary,
                      theme.borders.dividerThicknessPx);
 }
 
@@ -188,30 +207,25 @@ void CompanionRenderer::drawStackedCodexScreen(
           : SemanticPresentation::availabilityColor(theme,
                                                      codex.availability);
 
-  drawAngledPanel(canvas, canvasReady, contentX, 53, contentWidth, 45,
+  drawAngledPanel(canvas, canvasReady, contentX, 43, contentWidth, 35,
                   stateColor, theme);
   uint8_t stateScale = theme.primitives.primaryTextScale;
-  const int stateChars = static_cast<int>(strlen(stateText));
-  if (stateChars * 8 * stateScale > contentWidth - 10) {
+  const int stateBaseWidth =
+      measureTextWidth(canvas, canvasReady, stateText);
+  if (stateBaseWidth * stateScale > contentWidth - 10) {
     stateScale = 1;
   }
-  if (stateScale == 1) {
-    drawText(canvas, canvasReady, contentX + 5, 54, "STATUS",
-             theme.palette.muted);
-  }
-  const int stateWidth = stateChars * 8 * stateScale;
+  const int stateWidth = stateBaseWidth * stateScale;
   drawScaledText(canvas, canvasReady,
                  contentX + max(5, (contentWidth - stateWidth) / 2),
-                 stateScale > 1 ? 65 : 73, stateText, stateColor, stateScale,
+                 stateScale > 1 ? 44 : 52, stateText, stateColor, stateScale,
                  theme);
 
-  drawText(canvas, canvasReady, contentX, 102, "TASK",
-           theme.palette.muted);
   const String taskTitle = codex.currentTaskTitle.isEmpty()
                                ? String("No active task")
                                : codex.currentTaskTitle;
   _codexTaskMarquee.configure(taskTitle, contentWidth, nowMs);
-  drawClippedText(canvas, canvasReady, contentX, 117, contentWidth, taskTitle,
+  drawClippedText(canvas, canvasReady, contentX, 83, contentWidth, taskTitle,
                   _codexTaskMarquee.offsetPixels(nowMs),
                   theme.palette.primary);
   _codexTaskMarquee.noteRendered(nowMs);
@@ -219,11 +233,20 @@ void CompanionRenderer::drawStackedCodexScreen(
   char taskPercent[8];
   formatPercentage(codex.taskProgressPercentage, taskPercent,
                    sizeof(taskPercent));
-  char taskLabel[24];
-  snprintf(taskLabel, sizeof(taskLabel), "TASK PROGRESS %s", taskPercent);
-  drawText(canvas, canvasReady, contentX, 136, taskLabel,
+  const char *progressLabel = "PROGRESS";
+  const int progressLabelWidth =
+      measureTextWidth(canvas, canvasReady, progressLabel);
+  const int progressValueWidth =
+      measureTextWidth(canvas, canvasReady, taskPercent);
+  const int progressGap =
+      min(8, max(1, contentWidth - progressLabelWidth - progressValueWidth));
+  const int progressValueX =
+      contentX + progressLabelWidth + progressGap;
+  drawText(canvas, canvasReady, contentX, 108, progressLabel,
+           theme.palette.primary);
+  drawText(canvas, canvasReady, progressValueX, 108, taskPercent,
            theme.palette.info);
-  drawSegmentedProgress(canvas, canvasReady, contentX, 152, contentWidth,
+  drawSegmentedProgress(canvas, canvasReady, contentX, 125, contentWidth,
                         codex.taskProgressPercentage, theme.palette.info,
                         theme);
 
@@ -240,58 +263,67 @@ void CompanionRenderer::drawStackedCodexScreen(
   } else {
     snprintf(allowanceValue, sizeof(allowanceValue), "N/A");
   }
-  char allowanceLabel[24];
-  snprintf(allowanceLabel, sizeof(allowanceLabel), "ALLOWANCE %s",
-           allowanceValue);
   const uint16_t allowanceColor =
       codex.allowanceAvailability == DataAvailability::Stale
           ? theme.palette.warning
           : codex.allowanceAvailability == DataAvailability::Error
                 ? theme.palette.error
-                : theme.palette.primary;
-  drawText(canvas, canvasReady, contentX, 166, allowanceLabel,
+                : codex.allowanceAvailability == DataAvailability::Loading
+                      ? theme.palette.info
+                      : theme.palette.secondary;
+  const char *allowanceLabel = "ALLOW";
+  const int allowanceLabelWidth =
+      measureTextWidth(canvas, canvasReady, allowanceLabel);
+  const int allowanceValueWidth =
+      measureTextWidth(canvas, canvasReady, allowanceValue);
+  const int allowanceGap =
+      min(8, max(1, contentWidth - allowanceLabelWidth - allowanceValueWidth));
+  const int allowanceValueX =
+      contentX + allowanceLabelWidth + allowanceGap;
+  drawText(canvas, canvasReady, contentX, 141, allowanceLabel,
+           theme.palette.primary);
+  drawText(canvas, canvasReady, allowanceValueX, 141, allowanceValue,
            allowanceColor);
   if (allowanceKnown) {
-    drawSegmentedProgress(canvas, canvasReady, contentX, 182, contentWidth,
+    drawSegmentedProgress(canvas, canvasReady, contentX, 158, contentWidth,
                           codex.allowanceRemainingPercentage,
                           theme.palette.secondary, theme);
   }
 
-  bool resetUsesSecondLine = false;
-  char resetLocalTime[8] = "";
   if (allowanceKnown && !codex.allowanceResetText.isEmpty()) {
-    drawText(canvas, canvasReady, contentX, 196, "RESET",
+    drawText(canvas, canvasReady, contentX, 176, "RST",
              theme.palette.muted);
-    drawClippedText(canvas, canvasReady, contentX + 48, 196,
-                    contentWidth - 48, codex.allowanceResetText, 0,
+    const int resetValueX =
+        contentX + measureTextWidth(canvas, canvasReady, "RST") + 8;
+    drawClippedText(canvas, canvasReady, resetValueX, 176,
+                    displayWidth(canvas, canvasReady) - resetValueX - 1,
+                    codex.allowanceResetText, 0,
                     theme.palette.info);
   } else if (allowanceKnown && codex.allowanceResetUnixSeconds.known) {
     char resetDate[8];
+    char resetLocalTime[8];
     if (formatResetDateTime(codex.allowanceResetUnixSeconds, resetDate,
                             sizeof(resetDate), resetLocalTime,
                             sizeof(resetLocalTime))) {
-      drawText(canvas, canvasReady, contentX, 196, "RESET",
+      drawText(canvas, canvasReady, contentX, 176, "RST",
                theme.palette.muted);
-      drawText(canvas, canvasReady, contentX + 48, 196, resetDate,
+      const int resetValueX =
+          contentX + measureTextWidth(canvas, canvasReady, "RST") + 8;
+      char resetValue[16];
+      snprintf(resetValue, sizeof(resetValue), "%s %s", resetDate,
+               resetLocalTime);
+      drawText(canvas, canvasReady, resetValueX, 176, resetValue,
                theme.palette.info);
-      resetUsesSecondLine = true;
     }
   }
 
   char updated[8];
   formatTime(codex.lastUpdateUnixSeconds, updated, sizeof(updated));
-  char updatedLabel[20];
-  if (resetUsesSecondLine) {
-    drawText(canvas, canvasReady, contentX, 212, resetLocalTime,
-             theme.palette.info);
-    snprintf(updatedLabel, sizeof(updatedLabel), "UP%s", updated);
-    drawText(canvas, canvasReady, contentX + 48, 212, updatedLabel,
-             theme.palette.muted);
-  } else {
-    snprintf(updatedLabel, sizeof(updatedLabel), "UPDATED %s", updated);
-    drawText(canvas, canvasReady, contentX, 212, updatedLabel,
-             theme.palette.muted);
-  }
+  drawText(canvas, canvasReady, contentX, 198, "UPD", theme.palette.muted);
+  const int updatedValueX =
+      contentX + measureTextWidth(canvas, canvasReady, "UPD") + 8;
+  drawText(canvas, canvasReady, updatedValueX, 198, updated,
+           theme.palette.info);
 }
 
 void CompanionRenderer::drawStackedMeetingScreen(
@@ -397,10 +429,14 @@ void CompanionRenderer::drawStackedMeetingScreen(
 void CompanionRenderer::drawStackedFooter(M5Canvas &canvas, bool canvasReady,
                                            const ThemeStyle &theme) const {
   const int y = displayHeight(canvas, canvasReady) - 15;
+  const char *leftLabel = "A:VIEW";
+  const char *rightLabel = "B:HOLD";
+  const int edge = 6;
+  const int rightX = displayWidth(canvas, canvasReady) - edge -
+                     measureTextWidth(canvas, canvasReady, rightLabel);
   drawHorizontalLine(canvas, canvasReady, y - 2, theme.palette.muted, 1);
-  drawText(canvas, canvasReady, 6, y, "A: VIEW", theme.palette.muted);
-  drawText(canvas, canvasReady, displayWidth(canvas, canvasReady) - 52, y,
-           "B HOLD", theme.palette.muted);
+  drawText(canvas, canvasReady, edge, y, leftLabel, theme.palette.muted);
+  drawText(canvas, canvasReady, rightX, y, rightLabel, theme.palette.muted);
 }
 
 void CompanionRenderer::drawHeader(M5Canvas &canvas, bool canvasReady,
@@ -791,18 +827,43 @@ void CompanionRenderer::drawSegmentedProgress(
   for (int i = 0; i < segments; ++i) {
     const int segmentX = x + i * (segmentWidth + gap);
     if (canvasReady) {
-      canvas.drawRect(segmentX, y, segmentWidth, theme.progress.barHeightPx,
-                      theme.palette.muted);
-      if (i < filled && segmentWidth > 2 && theme.progress.barHeightPx > 2) {
-        canvas.fillRect(segmentX + 1, y + 1, segmentWidth - 2,
-                        theme.progress.barHeightPx - 2, color);
+      if (!theme.progress.outlined) {
+        if (i < filled) {
+          canvas.fillRect(segmentX, y, segmentWidth,
+                          theme.progress.barHeightPx, color);
+        } else {
+          canvas.drawFastHLine(segmentX,
+                               y + theme.progress.barHeightPx / 2,
+                               segmentWidth, theme.palette.muted);
+        }
+      } else {
+        canvas.drawRect(segmentX, y, segmentWidth,
+                        theme.progress.barHeightPx, theme.palette.muted);
+        if (i < filled && segmentWidth > 2 &&
+            theme.progress.barHeightPx > 2) {
+          canvas.fillRect(segmentX + 1, y + 1, segmentWidth - 2,
+                          theme.progress.barHeightPx - 2, color);
+        }
       }
     } else {
-      M5.Display.drawRect(segmentX, y, segmentWidth,
-                          theme.progress.barHeightPx, theme.palette.muted);
-      if (i < filled && segmentWidth > 2 && theme.progress.barHeightPx > 2) {
-        M5.Display.fillRect(segmentX + 1, y + 1, segmentWidth - 2,
-                            theme.progress.barHeightPx - 2, color);
+      if (!theme.progress.outlined) {
+        if (i < filled) {
+          M5.Display.fillRect(segmentX, y, segmentWidth,
+                              theme.progress.barHeightPx, color);
+        } else {
+          M5.Display.drawFastHLine(segmentX,
+                                   y + theme.progress.barHeightPx / 2,
+                                   segmentWidth, theme.palette.muted);
+        }
+      } else {
+        M5.Display.drawRect(segmentX, y, segmentWidth,
+                            theme.progress.barHeightPx,
+                            theme.palette.muted);
+        if (i < filled && segmentWidth > 2 &&
+            theme.progress.barHeightPx > 2) {
+          M5.Display.fillRect(segmentX + 1, y + 1, segmentWidth - 2,
+                              theme.progress.barHeightPx - 2, color);
+        }
       }
     }
   }
@@ -812,11 +873,11 @@ void CompanionRenderer::drawBatteryIcon(M5Canvas &canvas, bool canvasReady,
                                         int x, int y,
                                         uint16_t color) const {
   if (canvasReady) {
-    canvas.drawRect(x, y, 13, 8, color);
-    canvas.fillRect(x + 13, y + 2, 2, 4, color);
+    canvas.drawRect(x, y, 8, 8, color);
+    canvas.fillRect(x + 8, y + 2, 2, 4, color);
   } else {
-    M5.Display.drawRect(x, y, 13, 8, color);
-    M5.Display.fillRect(x + 13, y + 2, 2, 4, color);
+    M5.Display.drawRect(x, y, 8, 8, color);
+    M5.Display.fillRect(x + 8, y + 2, 2, 4, color);
   }
 }
 

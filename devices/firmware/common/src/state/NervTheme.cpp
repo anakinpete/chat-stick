@@ -10,7 +10,7 @@ const ThemeStyle &nervThemeStyle() {
     value.palette.background = 0x0000; // Black.
     value.palette.primary = 0xFFDF;    // Pale essential text.
     value.palette.secondary = 0xF982;  // Vivid red-orange structure.
-    value.palette.muted = 0x8C92;      // Neutral technical grey.
+    value.palette.muted = 0x52AA;      // Subdued technical grey.
     value.palette.info = 0x06DB;       // Cyan technical accent.
     value.palette.success = 0x06DB;    // Cyan online/success state.
     value.palette.warning = 0xFFE0;    // Semantic warning yellow.
@@ -26,7 +26,7 @@ const ThemeStyle &nervThemeStyle() {
     value.borders.dividerThicknessPx = 2;
     value.borders.panelShape = ThemePanelShape::Angled;
     value.progress.barHeightPx = 8;
-    value.progress.outlined = true;
+    value.progress.outlined = false;
     value.progress.segmentCount = 10;
     value.alerts.treatment = ThemeAlertTreatment::Outline;
     value.symbols.indicatorMode = ThemeIndicatorMode::Text;
@@ -35,8 +35,8 @@ const ThemeStyle &nervThemeStyle() {
     value.primitives.orientation = ThemeOrientation::Portrait;
     value.primitives.composition = ThemeComposition::Stacked;
     value.primitives.mark = ThemeMark::Wordmark;
-    value.primitives.cornerCutPx = 7;
-    value.primitives.sideRailWidthPx = 3;
+    value.primitives.cornerCutPx = 5;
+    value.primitives.sideRailWidthPx = 0;
     value.primitives.primaryTextScale = 2;
     return value;
   }();
