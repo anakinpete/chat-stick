@@ -159,6 +159,33 @@ struct CodexAllowanceInfo {
 };
 
 /**
+ * @brief Privacy-safe Codex activity returned by the local activity route.
+ */
+struct CodexActivityInfo {
+  enum class State {
+    Idle,
+    Running,
+    Done,
+    Cancelled,
+    Stale,
+    Offline,
+    Unavailable
+  };
+
+  State state = State::Unavailable;
+  bool available = false;
+  bool stale = true;
+  String sessionId;
+  String turnId;
+  bool startedKnown = false;
+  int64_t startedAtUnixSeconds = 0;
+  bool completedKnown = false;
+  int64_t completedAtUnixSeconds = 0;
+  bool updatedKnown = false;
+  int64_t updatedAtUnixSeconds = 0;
+};
+
+/**
  * @brief Maintains the device-side WebSocket session with the chat server.
  */
 class LiveSessionService {
@@ -269,6 +296,13 @@ public:
    * @return True when the backend returned a valid normalized payload.
    */
   bool fetchCodexAllowance(CodexAllowanceInfo &outInfo);
+
+  /**
+   * @brief Fetch normalized Codex activity without retaining private content.
+   * @param outInfo Receives the allowlisted activity fields.
+   * @return True when the backend returned a valid normalized payload.
+   */
+  bool fetchCodexActivity(CodexActivityInfo &outInfo);
 
   /**
    * @brief Download and apply an OTA firmware update.

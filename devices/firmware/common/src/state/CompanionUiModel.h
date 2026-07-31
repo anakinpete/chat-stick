@@ -123,9 +123,10 @@ struct HeaderData {
 enum class CodexActivityState {
   Idle,
   Working,
-  Waiting,
-  Complete,
-  Error,
+  Done,
+  Cancelled,
+  Stale,
+  Offline,
   Unavailable,
 };
 
@@ -137,10 +138,8 @@ struct CodexStatusData {
   CodexActivityState activity = CodexActivityState::Unavailable;
   UiSeverity severity = UiSeverity::Normal;
 
-  String currentTaskTitle;
-
-  /// Completion of the current task, not usage allowance.
-  PercentageValue taskProgressPercentage;
+  /// Locally derived duration; valid only when known is true.
+  OptionalValue<uint32_t> elapsedSeconds;
 
   /// Remaining Codex usage or credit, independent of task progress.
   DataAvailability allowanceAvailability = DataAvailability::Unknown;

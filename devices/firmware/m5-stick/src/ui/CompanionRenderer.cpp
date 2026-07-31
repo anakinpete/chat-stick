@@ -53,6 +53,24 @@ void formatPercentage(const PercentageValue &value, char *buffer,
   snprintf(buffer, bufferSize, "%u%%", static_cast<unsigned>(value.value));
 }
 
+void formatActivityElapsed(const OptionalValue<uint32_t> &value, char *buffer,
+                           size_t bufferSize) {
+  if (!value.known) {
+    buffer[0] = '\0';
+    return;
+  }
+  const uint32_t seconds = value.value;
+  if (seconds >= 3600) {
+    snprintf(buffer, bufferSize, "ELAPSED %luH %02luM",
+             static_cast<unsigned long>(seconds / 3600),
+             static_cast<unsigned long>((seconds % 3600) / 60));
+  } else {
+    snprintf(buffer, bufferSize, "ELAPSED %luM %02luS",
+             static_cast<unsigned long>(seconds / 60),
+             static_cast<unsigned long>(seconds % 60));
+  }
+}
+
 void formatDuration(uint32_t seconds, const char *suffix, char *buffer,
                     size_t bufferSize) {
   if (seconds >= 3600) {
@@ -78,9 +96,11 @@ void CompanionRenderer::render(M5Canvas &canvas, bool canvasReady,
                                const CompanionUiModel &model,
                                const ThemeStyle &theme,
                                unsigned long nowMs) {
+  if (model.activeScreen == PrimaryScreen::Codex) {
+    _lastCodexFrameMs = nowMs;
+  }
   if (!_hasRenderedScreen || _lastScreen != model.activeScreen ||
       _lastTheme != theme.id) {
-    _codexTaskMarquee.reset();
     _meetingTitleMarquee.reset();
     _meetingAgendaMarquee.reset();
     _lastScreen = model.activeScreen;
@@ -115,7 +135,7 @@ bool CompanionRenderer::needsFrame(unsigned long nowMs) const {
     return false;
   }
   if (_lastScreen == PrimaryScreen::Codex) {
-    return _codexTaskMarquee.needsFrame(nowMs);
+    return nowMs - _lastCodexFrameMs >= 1000;
   }
   return _meetingTitleMarquee.needsFrame(nowMs) ||
          _meetingAgendaMarquee.needsFrame(nowMs);
@@ -123,8 +143,8 @@ bool CompanionRenderer::needsFrame(unsigned long nowMs) const {
 
 void CompanionRenderer::reset() {
   _hasRenderedScreen = false;
+  _lastCodexFrameMs = 0;
   _lastTheme = ThemeId::Plain;
-  _codexTaskMarquee.reset();
   _meetingTitleMarquee.reset();
   _meetingAgendaMarquee.reset();
 }
@@ -193,19 +213,12 @@ void CompanionRenderer::drawStackedHeader(M5Canvas &canvas, bool canvasReady,
 
 void CompanionRenderer::drawStackedCodexScreen(
     M5Canvas &canvas, bool canvasReady, const CodexStatusData &codex,
-    const ThemeStyle &theme, unsigned long nowMs) {
+    const ThemeStyle &theme, unsigned long /*nowMs*/) {
   const int contentX = 6;
   const int contentWidth = displayWidth(canvas, canvasReady) - contentX - 4;
-  const char *stateText = codex.availability == DataAvailability::Available
-                              ? SemanticPresentation::activityLabel(
-                                    codex.activity)
-                              : SemanticPresentation::availabilityLabel(
-                                    codex.availability);
+  const char *stateText = SemanticPresentation::activityLabel(codex.activity);
   const uint16_t stateColor =
-      codex.availability == DataAvailability::Available
-          ? SemanticPresentation::severityColor(theme, codex.severity)
-          : SemanticPresentation::availabilityColor(theme,
-                                                     codex.availability);
+      SemanticPresentation::severityColor(theme, codex.severity);
 
   drawAngledPanel(canvas, canvasReady, contentX, 43, contentWidth, 35,
                   stateColor, theme);
@@ -221,34 +234,14 @@ void CompanionRenderer::drawStackedCodexScreen(
                  stateScale > 1 ? 44 : 52, stateText, stateColor, stateScale,
                  theme);
 
-  const String taskTitle = codex.currentTaskTitle.isEmpty()
-                               ? String("No active task")
-                               : codex.currentTaskTitle;
-  _codexTaskMarquee.configure(taskTitle, contentWidth, nowMs);
-  drawClippedText(canvas, canvasReady, contentX, 83, contentWidth, taskTitle,
-                  _codexTaskMarquee.offsetPixels(nowMs),
-                  theme.palette.primary);
-  _codexTaskMarquee.noteRendered(nowMs);
-
-  char taskPercent[8];
-  formatPercentage(codex.taskProgressPercentage, taskPercent,
-                   sizeof(taskPercent));
-  const char *progressLabel = "PROGRESS";
-  const int progressLabelWidth =
-      measureTextWidth(canvas, canvasReady, progressLabel);
-  const int progressValueWidth =
-      measureTextWidth(canvas, canvasReady, taskPercent);
-  const int progressGap =
-      min(8, max(1, contentWidth - progressLabelWidth - progressValueWidth));
-  const int progressValueX =
-      contentX + progressLabelWidth + progressGap;
-  drawText(canvas, canvasReady, contentX, 108, progressLabel,
-           theme.palette.primary);
-  drawText(canvas, canvasReady, progressValueX, 108, taskPercent,
-           theme.palette.info);
-  drawSegmentedProgress(canvas, canvasReady, contentX, 125, contentWidth,
-                        codex.taskProgressPercentage, theme.palette.info,
-                        theme);
+  char elapsed[24];
+  formatActivityElapsed(codex.elapsedSeconds, elapsed, sizeof(elapsed));
+  if (elapsed[0]) {
+    const int elapsedWidth = measureTextWidth(canvas, canvasReady, elapsed);
+    drawText(canvas, canvasReady,
+             contentX + max(0, (contentWidth - elapsedWidth) / 2), 91,
+             elapsed, theme.palette.primary);
+  }
 
   char allowanceValue[8];
   const bool allowanceKnown =
@@ -503,47 +496,29 @@ void CompanionRenderer::drawHeader(M5Canvas &canvas, bool canvasReady,
 void CompanionRenderer::drawCodexScreen(M5Canvas &canvas, bool canvasReady,
                                         const CodexStatusData &codex,
                                         const ThemeStyle &theme,
-                                        unsigned long nowMs) {
-  const char *stateText = codex.availability == DataAvailability::Available
-                              ? SemanticPresentation::activityLabel(
-                                    codex.activity)
-                              : SemanticPresentation::availabilityLabel(
-                                    codex.availability);
+                                        unsigned long /*nowMs*/) {
+  const char *stateText = SemanticPresentation::activityLabel(codex.activity);
   const char *activitySymbol =
       SemanticPresentation::activitySymbol(theme, codex.activity);
   char heading[28];
   if (activitySymbol && activitySymbol[0] != '\0' &&
-      codex.availability == DataAvailability::Available) {
+      codex.activity != CodexActivityState::Unavailable) {
     snprintf(heading, sizeof(heading), "CODEX  %s %s", activitySymbol,
              stateText);
   } else {
     snprintf(heading, sizeof(heading), "CODEX  %s", stateText);
   }
   const uint16_t headingColor =
-      codex.availability == DataAvailability::Available
-          ? SemanticPresentation::severityColor(theme, codex.severity)
-          : SemanticPresentation::availabilityColor(theme,
-                                                     codex.availability);
+      SemanticPresentation::severityColor(theme, codex.severity);
   drawText(canvas, canvasReady, 4, 18, heading, headingColor);
 
-  drawText(canvas, canvasReady, 4, 35, "TASK", theme.palette.muted);
-  if (codex.currentTaskTitle.isEmpty()) {
-    _codexTaskMarquee.reset();
-    drawText(canvas, canvasReady, 44, 35, "No active task",
-             theme.palette.primary);
-  } else {
-    _codexTaskMarquee.configure(codex.currentTaskTitle, 192, nowMs);
-    drawClippedText(canvas, canvasReady, 44, 35, 192,
-                    codex.currentTaskTitle,
-                    _codexTaskMarquee.offsetPixels(nowMs),
-                    theme.palette.primary);
-    _codexTaskMarquee.noteRendered(nowMs);
+  char elapsed[24];
+  formatActivityElapsed(codex.elapsedSeconds, elapsed, sizeof(elapsed));
+  if (elapsed[0]) {
+    drawText(canvas, canvasReady, 4, 35, elapsed, theme.palette.primary);
   }
 
-  char taskPercent[8];
   char allowancePercent[8];
-  formatPercentage(codex.taskProgressPercentage, taskPercent,
-                   sizeof(taskPercent));
   const bool allowanceKnown =
       (codex.allowanceAvailability == DataAvailability::Available ||
        codex.allowanceAvailability == DataAvailability::Stale) &&
@@ -554,9 +529,8 @@ void CompanionRenderer::drawCodexScreen(M5Canvas &canvas, bool canvasReady,
   } else {
     snprintf(allowancePercent, sizeof(allowancePercent), "N/A");
   }
-  char metrics[32];
-  snprintf(metrics, sizeof(metrics), "TASK %s  ALLOWANCE %s", taskPercent,
-           allowancePercent);
+  char metrics[24];
+  snprintf(metrics, sizeof(metrics), "ALLOWANCE %s", allowancePercent);
   drawText(canvas, canvasReady, 4, 56, metrics,
            codex.allowanceAvailability == DataAvailability::Stale
                ? theme.palette.warning

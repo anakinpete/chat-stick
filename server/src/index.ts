@@ -1,6 +1,13 @@
 import { LiveSession } from './live-session'
 import { indexDocs, vectorSearch } from './docs-search'
 import { fetchCodexAllowanceBridge } from './codex-allowance-proxy'
+import { fetchCodexActivityBridge } from './codex-activity-proxy'
+import {
+	getRequestToken,
+	isAuthenticatedDeviceRequest,
+	isAuthorizedDeviceRequest,
+	secureTokenEquals,
+} from './request-auth'
 
 export { LiveSession }
 
@@ -14,6 +21,7 @@ export interface Env {
 	ADMIN_API_TOKEN?: string
 	DEVICE_AUTH_TOKEN?: string
 	CODEX_ALLOWANCE_BRIDGE_URL?: string
+	CODEX_ACTIVITY_BRIDGE_URL?: string
 	STORAGE?: R2Bucket
 }
 
@@ -111,6 +119,15 @@ export default {
 					return json({ error: { code: 'method_not_allowed' } }, { status: 405 })
 				}
 				return proxyCodexAllowance(env)
+
+			case '/api/codex/activity':
+				if (!isAuthorizedDeviceRequest(request, env)) {
+					return json({ error: { code: 'unauthorized' } }, { status: 401 })
+				}
+				if (request.method !== 'GET') {
+					return json({ error: { code: 'method_not_allowed' } }, { status: 405 })
+				}
+				return proxyCodexActivity(env)
 
 			case '/firmware/check': {
 				if (!isAuthorizedDeviceRequest(request, env)) {
@@ -234,6 +251,14 @@ async function proxyCodexAllowance(env: Env): Promise<Response> {
 	})
 }
 
+async function proxyCodexActivity(env: Env): Promise<Response> {
+	const result = await fetchCodexActivityBridge(env.CODEX_ACTIVITY_BRIDGE_URL)
+	return json(result.payload, {
+		status: result.status,
+		headers: { 'Cache-Control': 'no-store' },
+	})
+}
+
 function corsHeaders(): HeadersInit {
 	return {
 		'Access-Control-Allow-Origin': '*',
@@ -280,52 +305,4 @@ function isAuthorizedAdminRequest(request: Request, env: Env): boolean {
 	})
 
 	return secureTokenEquals(providedToken, configuredToken)
-}
-
-function isAuthorizedDeviceRequest(request: Request, env: Env): boolean {
-	const configuredToken = env.DEVICE_AUTH_TOKEN?.trim()
-	if (!configuredToken) return true
-
-	const providedToken = getRequestToken(request, {
-		headerNames: ['X-Device-Token'],
-		queryNames: ['device_token'],
-	})
-
-	return secureTokenEquals(providedToken, configuredToken)
-}
-
-function isAuthenticatedDeviceRequest(request: Request, env: Env): boolean {
-	return Boolean(env.DEVICE_AUTH_TOKEN?.trim()) && isAuthorizedDeviceRequest(request, env)
-}
-
-function getRequestToken(
-	request: Request,
-	options: { headerNames: string[]; queryNames: string[] }
-): string {
-	for (const headerName of options.headerNames) {
-		const value = request.headers.get(headerName)
-		if (value) return value.trim()
-	}
-
-	const auth = request.headers.get('Authorization') || ''
-	const bearer = auth.match(/^Bearer\s+(.+)$/i)?.[1]
-	if (bearer) return bearer.trim()
-
-	const url = new URL(request.url)
-	for (const queryName of options.queryNames) {
-		const value = url.searchParams.get(queryName)
-		if (value) return value.trim()
-	}
-
-	return ''
-}
-
-function secureTokenEquals(providedToken: string, configuredToken: string): boolean {
-	if (!providedToken || providedToken.length !== configuredToken.length) return false
-
-	let diff = 0
-	for (let i = 0; i < configuredToken.length; i++) {
-		diff |= configuredToken.charCodeAt(i) ^ providedToken.charCodeAt(i)
-	}
-	return diff === 0
 }

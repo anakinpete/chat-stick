@@ -12,6 +12,12 @@ struct CompanionRuntimeSignals {
   bool wifiConnected = false;
   bool backendConnected = false;
   bool backendConnecting = false;
+  CodexActivityState activity = CodexActivityState::Unavailable;
+  DataAvailability activityAvailability = DataAvailability::Unavailable;
+  OptionalValue<uint32_t> activityElapsedSeconds =
+      OptionalValue<uint32_t>::unknown();
+  OptionalValue<int64_t> activityUpdatedUnixSeconds =
+      OptionalValue<int64_t>::unknown();
   DataAvailability allowanceAvailability = DataAvailability::Unknown;
   PercentageValue allowanceRemainingPercentage = PercentageValue::unknown();
   OptionalValue<int64_t> allowanceResetUnixSeconds =
@@ -23,8 +29,9 @@ struct CompanionRuntimeSignals {
 /**
  * @brief Development adapter used until live companion providers are added.
  *
- * Hardware and connection values come from CompanionRuntimeSignals. Weather,
- * Codex, and meeting content below is deliberately isolated demo data.
+ * Hardware, Codex activity, allowance, and connection values come from
+ * CompanionRuntimeSignals. Weather and meeting content remain isolated demo
+ * data until their providers are implemented.
  */
 class CompanionDemoData {
 public:

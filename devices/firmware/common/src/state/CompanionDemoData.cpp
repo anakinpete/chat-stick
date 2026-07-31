@@ -27,9 +27,6 @@ CompanionDemoData::update(const CompanionRuntimeSignals &signals,
     _model.header.weather.temperature = OptionalValue<float>::from(18.0f);
     _model.header.weather.temperatureUnit = TemperatureUnit::Celsius;
 
-    _model.codex.currentTaskTitle =
-        "Build the plain two-screen companion renderer";
-    _model.codex.taskProgressPercentage = PercentageValue::from(68);
     _model.meeting.title =
         "M5 Sci-Fi Companion architecture and hardware review";
     _model.meeting.locationType = MeetingLocationType::VideoCall;
@@ -57,20 +54,34 @@ CompanionDemoData::update(const CompanionRuntimeSignals &signals,
       signals.allowanceResetUnixSeconds;
   _model.codex.allowanceResetText = "";
 
-  if (signals.backendConnected) {
-    _model.codex.availability = DataAvailability::Available;
-    _model.codex.activity = CodexActivityState::Working;
+  _model.codex.availability = signals.activityAvailability;
+  _model.codex.activity = signals.activity;
+  _model.codex.elapsedSeconds = signals.activityElapsedSeconds;
+  switch (signals.activity) {
+  case CodexActivityState::Working:
     _model.codex.severity = UiSeverity::Warning;
-  } else if (signals.wifiConnected) {
-    _model.codex.availability = DataAvailability::Loading;
-    _model.codex.activity = CodexActivityState::Waiting;
-    _model.codex.severity = UiSeverity::Info;
-  } else {
-    _model.codex.availability = DataAvailability::Unavailable;
-    _model.codex.activity = CodexActivityState::Unavailable;
+    break;
+  case CodexActivityState::Done:
+    _model.codex.severity = UiSeverity::Success;
+    break;
+  case CodexActivityState::Cancelled:
+    _model.codex.severity = UiSeverity::Warning;
+    break;
+  case CodexActivityState::Stale:
+    _model.codex.severity = UiSeverity::Warning;
+    break;
+  case CodexActivityState::Offline:
+  case CodexActivityState::Unavailable:
     _model.codex.severity = UiSeverity::Error;
+    break;
+  case CodexActivityState::Idle:
+  default:
+    _model.codex.severity = UiSeverity::Normal;
+    break;
   }
-  if (signals.allowanceUpdatedUnixSeconds.known) {
+  if (signals.activityUpdatedUnixSeconds.known) {
+    _model.codex.lastUpdateUnixSeconds = signals.activityUpdatedUnixSeconds;
+  } else if (signals.allowanceUpdatedUnixSeconds.known) {
     _model.codex.lastUpdateUnixSeconds =
         signals.allowanceUpdatedUnixSeconds;
   } else if (_model.header.currentTimeUnixSeconds.known) {

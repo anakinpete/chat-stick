@@ -24,7 +24,7 @@ private:
   PrimaryScreen _lastScreen = PrimaryScreen::Codex;
   ThemeId _lastTheme = ThemeId::Plain;
   bool _hasRenderedScreen = false;
-  TextMarquee _codexTaskMarquee;
+  unsigned long _lastCodexFrameMs = 0;
   TextMarquee _meetingTitleMarquee;
   TextMarquee _meetingAgendaMarquee;
 

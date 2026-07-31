@@ -78,11 +78,14 @@ SemanticPresentation::activityLabel(CodexActivityState state) {
     return "IDLE";
   case CodexActivityState::Working:
     return "WORKING";
-  case CodexActivityState::Waiting:
-    return "ACTION REQUIRED";
-  case CodexActivityState::Complete:
+  case CodexActivityState::Done:
     return "DONE";
-  case CodexActivityState::Error:
+  case CodexActivityState::Cancelled:
+    return "STOPPED";
+  case CodexActivityState::Stale:
+    return "STALE";
+  case CodexActivityState::Offline:
+    return "OFFLINE";
     return "ERROR";
   case CodexActivityState::Unavailable:
   default:
@@ -98,11 +101,13 @@ SemanticPresentation::activitySymbol(const ThemeStyle &theme,
     return theme.symbols.activityIdle;
   case CodexActivityState::Working:
     return theme.symbols.activityWorking;
-  case CodexActivityState::Waiting:
-    return theme.symbols.activityWaiting;
-  case CodexActivityState::Complete:
+  case CodexActivityState::Done:
     return theme.symbols.activityComplete;
-  case CodexActivityState::Error:
+  case CodexActivityState::Cancelled:
+    return theme.symbols.activityWaiting;
+  case CodexActivityState::Stale:
+    return theme.symbols.activityWaiting;
+  case CodexActivityState::Offline:
   case CodexActivityState::Unavailable:
   default:
     return theme.symbols.activityError;

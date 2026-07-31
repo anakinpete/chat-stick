@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "diag/Log.h"
 #include "hal/Board.h"
+#include "state/CodexActivityTiming.h"
 #include <ArduinoJson.h>
 #include <WiFi.h>
 #include <string.h>
@@ -1865,6 +1866,10 @@ void AppController::processMenuFetches() {
   if (_allowanceFetchTask != nullptr && _allowanceFetchDone) {
     finishCodexAllowanceFetch();
   }
+
+  if (_activityFetchTask != nullptr && _activityFetchDone) {
+    finishCodexActivityFetch();
+  }
 }
 
 void AppController::processPower() {
@@ -1891,9 +1896,66 @@ void AppController::processCaptivePortal() {
 
 void AppController::processCompanionUi() {
   processCodexAllowance();
+  processCodexActivity();
   if (shouldRenderCompanion() && _display.companionNeedsFrame(millis())) {
     _screenDirty = true;
   }
+}
+
+void AppController::processCodexActivity() {
+  if (!shouldRenderCompanion() || !_wifi.isConnected() ||
+      _activityFetchTask != nullptr) {
+    if (!_wifi.isConnected() && _activityFetchTask == nullptr) {
+      _activityTransportStale = _hasCodexActivity;
+    }
+    return;
+  }
+
+  const unsigned long now = millis();
+  if (_activityFetchStarted &&
+      now - _lastActivityFetchMs < kCodexActivityRefreshMs) {
+    return;
+  }
+
+  _activityFetchStarted = true;
+  _lastActivityFetchMs = now;
+  _activityFetchDone = false;
+  _activityFetchOk = false;
+  _activityFetchInfo = CodexActivityInfo{};
+
+  const BaseType_t ok = xTaskCreatePinnedToCore(
+      &AppController::codexActivityFetchTaskTrampoline, "codex_activity",
+      kMenuFetchTaskStack, this, 1, &_activityFetchTask, 1);
+  if (ok != pdPASS) {
+    _activityFetchTask = nullptr;
+    _activityTransportStale = _hasCodexActivity;
+    Log::client("Codex", "failed to start activity fetch task");
+  }
+  _screenDirty = true;
+}
+
+void AppController::codexActivityFetchTaskTrampoline(void *ctx) {
+  static_cast<AppController *>(ctx)->codexActivityFetchTask();
+}
+
+void AppController::codexActivityFetchTask() {
+  _activityFetchOk = _live.fetchCodexActivity(_activityFetchInfo);
+  _activityFetchDone = true;
+  vTaskDelete(nullptr);
+}
+
+void AppController::finishCodexActivityFetch() {
+  _activityFetchTask = nullptr;
+  if (!_activityFetchOk) {
+    _activityTransportStale = _hasCodexActivity;
+    _screenDirty = true;
+    return;
+  }
+
+  _codexActivityInfo = _activityFetchInfo;
+  _hasCodexActivity = true;
+  _activityTransportStale = false;
+  _screenDirty = true;
 }
 
 void AppController::processCodexAllowance() {
@@ -1996,6 +2058,66 @@ const CompanionUiModel &AppController::buildCompanionUi() {
   signals.backendConnected = _live.isConnected();
   signals.backendConnecting =
       _networkStackStarted && signals.wifiConnected && !signals.backendConnected;
+  if (!signals.wifiConnected) {
+    signals.activity = CodexActivityState::Offline;
+    signals.activityAvailability = DataAvailability::Unavailable;
+  } else if (!_hasCodexActivity) {
+    signals.activity = CodexActivityState::Unavailable;
+    signals.activityAvailability = DataAvailability::Unavailable;
+  } else {
+    switch (_codexActivityInfo.state) {
+    case CodexActivityInfo::State::Idle:
+      signals.activity = CodexActivityState::Idle;
+      break;
+    case CodexActivityInfo::State::Running:
+      signals.activity = CodexActivityState::Working;
+      break;
+    case CodexActivityInfo::State::Done:
+      signals.activity = CodexActivityState::Done;
+      break;
+    case CodexActivityInfo::State::Cancelled:
+      signals.activity = CodexActivityState::Cancelled;
+      break;
+    case CodexActivityInfo::State::Stale:
+      signals.activity = CodexActivityState::Stale;
+      break;
+    case CodexActivityInfo::State::Offline:
+      signals.activity = CodexActivityState::Offline;
+      break;
+    case CodexActivityInfo::State::Unavailable:
+    default:
+      signals.activity = CodexActivityState::Unavailable;
+      break;
+    }
+    if (_activityTransportStale) {
+      signals.activity = CodexActivityState::Stale;
+    }
+    signals.activityAvailability =
+        signals.activity == CodexActivityState::Unavailable ||
+                signals.activity == CodexActivityState::Offline
+            ? DataAvailability::Unavailable
+            : signals.activity == CodexActivityState::Stale
+                  ? DataAvailability::Stale
+                  : DataAvailability::Available;
+    if (_codexActivityInfo.updatedKnown) {
+      signals.activityUpdatedUnixSeconds = OptionalValue<int64_t>::from(
+          _codexActivityInfo.updatedAtUnixSeconds);
+    }
+
+    const bool allowLiveElapsed =
+        _codexActivityInfo.state == CodexActivityInfo::State::Running ||
+        _codexActivityInfo.state == CodexActivityInfo::State::Stale;
+    const CodexActivityElapsed elapsed = calculateCodexActivityElapsed(
+        _codexActivityInfo.startedKnown,
+        _codexActivityInfo.startedAtUnixSeconds,
+        _codexActivityInfo.completedKnown,
+        _codexActivityInfo.completedAtUnixSeconds, allowLiveElapsed,
+        signals.currentTimeUnixSeconds);
+    if (elapsed.known) {
+      signals.activityElapsedSeconds =
+          OptionalValue<uint32_t>::from(elapsed.seconds);
+    }
+  }
   signals.allowanceAvailability = _allowanceAvailability;
   if (_hasCodexAllowance) {
     signals.allowanceRemainingPercentage =

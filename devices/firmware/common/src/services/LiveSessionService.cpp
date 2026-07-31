@@ -9,6 +9,7 @@
 #include <WiFiClientSecure.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 
 using namespace websockets;
 
@@ -791,6 +792,136 @@ bool LiveSessionService::fetchCodexAllowance(CodexAllowanceInfo &outInfo) {
 
         // Valid safe payloads include 401/503 unavailable states. Accept them
         // so the UI can distinguish provider state without exposing errors.
+        return HttpGetDecision::Success;
+      });
+}
+
+bool LiveSessionService::fetchCodexActivity(CodexActivityInfo &outInfo) {
+  outInfo = CodexActivityInfo{};
+
+  return getFromConfiguredEndpoints(
+      "fetching Codex activity from",
+      [this](const ServerEndpoint &endpoint) {
+        return endpointBaseUrl(endpoint) +
+               "/api/codex/activity?device_id=" + DEVICE_ID;
+      },
+      [this, &outInfo](const HttpGetResponse &response) {
+        if (response.statusCode != 200 || response.body.isEmpty()) {
+          logClient("HTTP", "Codex activity failed status=%d",
+                    response.statusCode);
+          return HttpGetDecision::Continue;
+        }
+
+        JsonDocument doc;
+        if (deserializeJson(doc, response.body) || !doc.is<JsonObject>()) {
+          logClient("HTTP", "Codex activity response invalid");
+          return HttpGetDecision::Continue;
+        }
+
+        const char *provider = doc["provider"] | "";
+        const char *state = doc["state"] | "";
+        if (strcmp(provider, "codex") != 0 || !doc["available"].is<bool>() ||
+            !doc["stale"].is<bool>() || !doc["updatedAt"].is<const char *>()) {
+          logClient("HTTP", "Codex activity schema invalid");
+          return HttpGetDecision::Continue;
+        }
+
+        int64_t updated = 0;
+        if (!parseUtcIso8601(doc["updatedAt"].as<const char *>(), updated)) {
+          logClient("HTTP", "Codex activity timestamp invalid");
+          return HttpGetDecision::Continue;
+        }
+
+        const bool available = doc["available"].as<bool>();
+        const bool stale = doc["stale"].as<bool>();
+        CodexActivityInfo::State parsedState;
+        if (strcmp(state, "idle") == 0) {
+          parsedState = CodexActivityInfo::State::Idle;
+        } else if (strcmp(state, "running") == 0) {
+          parsedState = CodexActivityInfo::State::Running;
+        } else if (strcmp(state, "done") == 0) {
+          parsedState = CodexActivityInfo::State::Done;
+        } else if (strcmp(state, "cancelled") == 0) {
+          parsedState = CodexActivityInfo::State::Cancelled;
+        } else if (strcmp(state, "stale") == 0) {
+          parsedState = CodexActivityInfo::State::Stale;
+        } else if (strcmp(state, "offline") == 0) {
+          parsedState = CodexActivityInfo::State::Offline;
+        } else if (strcmp(state, "unavailable") == 0) {
+          parsedState = CodexActivityInfo::State::Unavailable;
+        } else {
+          logClient("HTTP", "Codex activity state invalid");
+          return HttpGetDecision::Continue;
+        }
+
+        const bool turnState = parsedState == CodexActivityInfo::State::Running ||
+                               parsedState == CodexActivityInfo::State::Done ||
+                               parsedState == CodexActivityInfo::State::Cancelled ||
+                               parsedState == CodexActivityInfo::State::Stale;
+        if (turnState) {
+          if (!available || !doc["sessionId"].is<const char *>() ||
+              !doc["turnId"].is<const char *>() ||
+              !doc["startedAt"].is<const char *>()) {
+            return HttpGetDecision::Continue;
+          }
+          const char *sessionId = doc["sessionId"].as<const char *>();
+          const char *turnId = doc["turnId"].as<const char *>();
+          if (!sessionId || !sessionId[0] || strlen(sessionId) > 256 ||
+              !turnId || !turnId[0] || strlen(turnId) > 256) {
+            return HttpGetDecision::Continue;
+          }
+          int64_t started = 0;
+          if (!parseUtcIso8601(doc["startedAt"].as<const char *>(), started)) {
+            return HttpGetDecision::Continue;
+          }
+
+          outInfo.sessionId = sessionId;
+          outInfo.turnId = turnId;
+          outInfo.startedKnown = true;
+          outInfo.startedAtUnixSeconds = started;
+
+          if (parsedState == CodexActivityInfo::State::Done ||
+              parsedState == CodexActivityInfo::State::Cancelled) {
+            int64_t completed = 0;
+            const bool validCompletion =
+                doc["completedAt"].is<const char *>() &&
+                parseUtcIso8601(doc["completedAt"].as<const char *>(),
+                                completed) &&
+                completed >= started;
+            if (!validCompletion) {
+              if (parsedState == CodexActivityInfo::State::Done) {
+                return HttpGetDecision::Continue;
+              }
+            } else {
+              outInfo.completedKnown = true;
+              outInfo.completedAtUnixSeconds = completed;
+            }
+          } else if (!doc["completedAt"].isNull()) {
+            return HttpGetDecision::Continue;
+          }
+
+          if ((parsedState == CodexActivityInfo::State::Running && stale) ||
+              (parsedState == CodexActivityInfo::State::Stale && !stale)) {
+            return HttpGetDecision::Continue;
+          }
+        } else {
+          if (!doc["sessionId"].isNull() || !doc["turnId"].isNull() ||
+              !doc["startedAt"].isNull() || !doc["completedAt"].isNull()) {
+            return HttpGetDecision::Continue;
+          }
+          if ((parsedState == CodexActivityInfo::State::Unavailable &&
+               (available || !stale)) ||
+              (parsedState != CodexActivityInfo::State::Unavailable &&
+               !available)) {
+            return HttpGetDecision::Continue;
+          }
+        }
+
+        outInfo.state = parsedState;
+        outInfo.available = available;
+        outInfo.stale = stale;
+        outInfo.updatedKnown = true;
+        outInfo.updatedAtUnixSeconds = updated;
         return HttpGetDecision::Success;
       });
 }

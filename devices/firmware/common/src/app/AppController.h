@@ -112,6 +112,9 @@ private:
   /// Refresh cadence matching the local backend allowance cache.
   static constexpr unsigned long kCodexAllowanceRefreshMs = 60000;
 
+  /// Activity cadence aligned with the two-second local sidecar cache.
+  static constexpr unsigned long kCodexActivityRefreshMs = 3000;
+
   /// Maximum expired timers to handle in one loop pass.
   static constexpr int kMaxExpiredPerWake = MAX_TIMERS;
 
@@ -295,6 +298,24 @@ private:
   /// Result buffer written by the background allowance request.
   CodexAllowanceInfo _allowanceFetchInfo;
 
+  /// Most recently accepted privacy-safe Codex activity value.
+  CodexActivityInfo _codexActivityInfo;
+
+  /// Result buffer written by the background activity request.
+  CodexActivityInfo _activityFetchInfo;
+
+  /// Whether a valid activity contract has been received this boot.
+  bool _hasCodexActivity = false;
+
+  /// Whether cached activity is retained after a transport failure.
+  bool _activityTransportStale = false;
+
+  /// Whether the background activity request parsed a backend response.
+  bool _activityFetchOk = false;
+
+  /// Whether the background activity request has completed.
+  volatile bool _activityFetchDone = false;
+
   /// Current UI availability of the allowance provider.
   DataAvailability _allowanceAvailability = DataAvailability::Unknown;
 
@@ -367,11 +388,20 @@ private:
   /// Active background task for refreshing Codex allowance data.
   TaskHandle_t _allowanceFetchTask = nullptr;
 
+  /// Active background task for refreshing Codex activity.
+  TaskHandle_t _activityFetchTask = nullptr;
+
   /// Timestamp when the last Codex allowance refresh was started.
   unsigned long _lastAllowanceFetchMs = 0;
 
   /// Whether at least one allowance refresh has been attempted this boot.
   bool _allowanceFetchStarted = false;
+
+  /// Timestamp when the last Codex activity refresh was started.
+  unsigned long _lastActivityFetchMs = 0;
+
+  /// Whether at least one activity refresh has been attempted this boot.
+  bool _activityFetchStarted = false;
 
   /// Timestamp of the last power-management poll.
   unsigned long _lastPowerPollMs = 0;
@@ -562,6 +592,9 @@ private:
   /// Start a due Codex allowance refresh without blocking the main loop.
   void processCodexAllowance();
 
+  /// Start a due Codex activity refresh without blocking the main loop.
+  void processCodexActivity();
+
   /// Background worker body for the allowance endpoint request.
   void codexAllowanceFetchTask();
 
@@ -571,13 +604,22 @@ private:
   /// Apply a finished allowance request to the UI-facing cache.
   void finishCodexAllowanceFetch();
 
+  /// Background worker body for the activity endpoint request.
+  void codexActivityFetchTask();
+
+  /// FreeRTOS trampoline for codexActivityFetchTask().
+  static void codexActivityFetchTaskTrampoline(void *ctx);
+
+  /// Apply a finished activity request to the UI-facing cache.
+  void finishCodexActivityFetch();
+
   /// Render the UI when needed.
   void renderIfNeeded();
 
   /// Whether the normal ready-state companion UI should be visible.
   bool shouldRenderCompanion() const;
 
-  /// Build a companion snapshot from real signals and isolated demo content.
+  /// Build a companion snapshot from real provider signals and demo-only areas.
   const CompanionUiModel &buildCompanionUi();
 
   /// Toggle the temporary Codex/Meeting primary-screen selection.
