@@ -5,8 +5,8 @@
 /**
  * @brief Stable visual theme identities.
  *
- * Only Plain is currently selectable. The remaining identifiers reserve the
- * structural hooks for later theme implementations.
+ * Plain is the safe fallback. Product themes become selectable as their
+ * presentation implementations are completed.
  */
 enum class ThemeId : uint8_t {
   Plain,
@@ -59,6 +59,7 @@ struct ThemeBorders {
 struct ThemeProgressStyle {
   uint8_t barHeightPx = 4;
   bool outlined = true;
+  uint8_t segmentCount = 1;
 };
 
 enum class ThemeAlertTreatment : uint8_t {
@@ -74,6 +75,33 @@ struct ThemeAlertStyle {
 enum class ThemeIndicatorMode : uint8_t {
   Text,
   SymbolAndText,
+};
+
+enum class ThemeOrientation : uint8_t {
+  Landscape,
+  Portrait,
+};
+
+enum class ThemeComposition : uint8_t {
+  Standard,
+  Stacked,
+};
+
+enum class ThemeMark : uint8_t {
+  None,
+  Wordmark,
+};
+
+/**
+ * @brief Reusable presentation primitives selected by a theme.
+ */
+struct ThemePrimitives {
+  ThemeOrientation orientation = ThemeOrientation::Landscape;
+  ThemeComposition composition = ThemeComposition::Standard;
+  ThemeMark mark = ThemeMark::None;
+  uint8_t cornerCutPx = 0;
+  uint8_t sideRailWidthPx = 0;
+  uint8_t primaryTextScale = 1;
 };
 
 /**
@@ -119,4 +147,5 @@ struct ThemeStyle {
   ThemeProgressStyle progress;
   ThemeAlertStyle alerts;
   ThemeSymbols symbols;
+  ThemePrimitives primitives;
 };

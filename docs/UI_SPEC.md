@@ -152,15 +152,15 @@ SELECT THEME
 
 > Cancel
   Plain *
-  NERV [soon]
+  NERV
   Ghost HUD [soon]
 ```
 
 Button B moves and wraps through the complete list. Button A confirms an
 available entry. Cancel, or holding Button B to return, closes the selector
-without changing the active theme. The active theme has a `*` marker. The five
-unfinished product themes are visible as `[soon]` and cannot be selected;
-Plain is the currently available internal fallback.
+without changing the active theme. The active theme has a `*` marker. Plain and
+NERV are selectable. Ghost HUD, Pip-Boy, Alien Terminal, and Gundam Cockpit are
+visible as `[soon]` and cannot be selected. Plain remains the internal fallback.
 
 Later enhancement after each visual implementation:
 
@@ -211,6 +211,25 @@ Themes must not:
 - angular technical labels and warning-panel character;
 - strong caution and critical-state treatment;
 - dense appearance without sacrificing legibility.
+
+The first NERV hardware pass uses a 135 x 240 portrait composition for the two
+companion screens. It uses a compact locally drawn pointed fig-leaf silhouette,
+stem/veins, and `NERV` wordmark rather than an embedded logo asset. The emblem
+is decorative and occupies only the upper-left header area.
+
+The portrait hierarchy prioritizes state, task or meeting title, progress or
+timing, then shared context and secondary allowance/update details. Primary
+state and meeting-time text uses the largest existing font scale that fits;
+decorative labels remain secondary. Angular outlines, a narrow segmented side
+rail, and ten-segment progress bars provide structure without fake metrics.
+Colours are black, signal orange, and warm off-white, with yellow reserved for
+real warning/waiting semantics and red for real error/critical semantics.
+
+Only values from `CompanionUiModel` are rendered. Unknown task progress uses
+`--`; unknown allowance uses `N/A`, and allowance reset information is hidden
+unless real reset data is present. Existing elapsed-time marquees remain shared
+for task title, meeting title, and agenda. Landscape refinement for the NERV
+companion composition remains later hardware-tuning work.
 
 ### Ghost-style HUD
 

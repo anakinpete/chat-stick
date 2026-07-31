@@ -76,7 +76,7 @@ SELECT THEME
 
 > Cancel
   Plain *
-  NERV [soon]
+  NERV
   Ghost HUD [soon]
 ```
 
@@ -87,8 +87,9 @@ Inside the selector:
 - the list wraps and Cancel returns without changing the active theme;
 - the selected theme is stored in ESP32 Preferences and survives restart.
 
-Unfinished product themes remain visible as unavailable `[soon]` entries. They
-will be enabled one at a time as their full visual implementations are reviewed.
+NERV is the first selectable product theme. Ghost HUD, Pip-Boy, Alien Terminal,
+and Gundam Cockpit remain unavailable `[soon]` entries and will be enabled one
+at a time as their visual implementations are reviewed.
 
 ## Agreed configuration direction
 
@@ -131,7 +132,8 @@ At the time of this document revision:
 - persistent settings and the browser setup portal are implemented;
 - the shared UI model, plain renderer, theme contract, manager, and runtime
   selector are implemented;
-- the five product-theme visuals have not yet been implemented.
+- the portrait-first NERV visual implementation is available for hardware
+  review; the other four product-theme visuals remain unimplemented.
 
 ## Immediate next milestone
 

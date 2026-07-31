@@ -26,7 +26,7 @@ public:
 
   void init();
   void setBrightness(uint8_t brightness);
-  void render(const DisplayState &state);
+  void render(const DisplayState &state, const ThemeStyle &theme);
   void renderCompanion(const CompanionUiModel &model, const ThemeStyle &theme,
                        unsigned long nowMs);
   bool companionNeedsFrame(unsigned long nowMs) const;
@@ -48,6 +48,9 @@ private:
 
   mutable M5Canvas _canvas;
   bool _canvasReady = false;
+  ThemeOrientation _orientation = ThemeOrientation::Landscape;
+  int _canvasWidth = SCREEN_WIDTH_PX;
+  int _canvasHeight = SCREEN_HEIGHT_PX;
   uint16_t *_previousCanvas = nullptr;
   bool _hasPreviousCanvas = false;
 
@@ -61,6 +64,7 @@ private:
   String mergeEdgeText(const String &left, const String &right) const;
   String spaces(int count) const;
   int wrapBodyText(const String &text, String out[], int maxRows) const;
+  void ensureOrientation(ThemeOrientation orientation);
   void flushCanvas(bool forceFull = false);
   void drawLine(int row, const String &text, uint16_t color) const;
   void drawCharCell(int x, int yTop, char c, uint16_t color) const;
@@ -68,7 +72,7 @@ private:
                        uint16_t color) const;
   void drawGlyphAtRight(int row, char glyph, uint16_t color) const;
   void drawPageIndicator(int pageIndex, int pageCount) const;
-  void drawMenu(const DisplayState &state) const;
+  void drawMenu(const DisplayState &state, const ThemeStyle &theme) const;
   void drawStoredImage() const;
   void drawAlarm(const DisplayState &state) const;
   void drawBellIcon(int cx, int cy, uint16_t color) const;

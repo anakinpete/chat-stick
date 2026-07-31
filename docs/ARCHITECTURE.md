@@ -165,11 +165,11 @@ File names may be adjusted to fit the existing code. The separation of responsib
 
 `ThemeId` contains Plain, NERV, Ghost HUD, Pip-Boy, Alien Terminal, and Gundam
 Cockpit. Stable persistence identifiers are `plain`, `nerv`, `ghost`,
-`pip-boy`, `alien`, and `gundam`. Plain is internal and currently the only
-available implementation; the five product identities enumerate as unavailable
-until their visual styles are completed. The style contract uses static token
-data rather than virtual renderer classes, which fits the current memory
-constraints and keeps one Codex/Meeting implementation.
+`pip-boy`, `alien`, and `gundam`. Plain is internal and NERV is the first
+available product implementation. The other four product identities enumerate
+as unavailable until their visual styles are completed. The style contract uses
+static token data rather than virtual renderer classes, which fits the current
+memory constraints and keeps one Codex/Meeting implementation.
 
 The renderer receives the active `ThemeStyle` for each frame. It owns field
 order, layout, state handling, and marquee behavior; the theme owns visual
@@ -192,6 +192,20 @@ enumeration, and availability validation have one descriptor mapping in
 recognized-but-unimplemented persisted identifiers fall back to Plain. The
 selector lists all identities, marks unavailable entries `[soon]`, and persists
 only a confirmed available selection.
+
+NERV extends the static contract with reusable orientation, composition, theme
+mark, corner-cut, side-rail, primary-text-scale, and progress-segment tokens.
+`NervTheme` owns only those presentation values. The shared
+`CompanionRenderer` owns the reusable stacked composition and primitive drawing
+for angular panels, segmented progress, battery treatment, and the compact
+local leaf/wordmark approximation. It continues to own all semantic field order
+and marquee state.
+
+`TextDisplay` reuses the same 32,400-pixel framebuffer allocation and recreates
+its canvas only when crossing between the 240 x 135 landscape system UI and the
+135 x 240 portrait NERV companion composition. Existing menu, setup, reset,
+connection, and error screens remain landscape and consume the active palette;
+they do not gain duplicate NERV state logic.
 
 Normal companion input consumes the A+B hold before individual button actions.
 It suppresses events until both buttons are released, preventing screen toggle,

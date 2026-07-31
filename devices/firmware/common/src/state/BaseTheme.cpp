@@ -25,8 +25,12 @@ const ThemeStyle &baseThemeStyle() {
     value.borders.panelShape = ThemePanelShape::Flat;
     value.progress.barHeightPx = 4;
     value.progress.outlined = true;
+    value.progress.segmentCount = 1;
     value.alerts.treatment = ThemeAlertTreatment::TextOnly;
     value.symbols.indicatorMode = ThemeIndicatorMode::Text;
+    value.primitives.orientation = ThemeOrientation::Landscape;
+    value.primitives.composition = ThemeComposition::Standard;
+    value.primitives.mark = ThemeMark::None;
     return value;
   }();
   return style;

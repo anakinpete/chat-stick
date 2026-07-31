@@ -142,9 +142,9 @@ state labels.
 
 `ThemeManager` centrally maps identifiers, exposes themes, loads the saved
 selection through `SettingsStore`, and falls back to Plain for invalid or
-unimplemented themes. Plain is the only available theme in this phase; NERV,
-Ghost HUD, Pip-Boy, Alien Terminal, and Gundam Cockpit are enumerated but
-unavailable.
+unimplemented themes. Plain is the permanent safe fallback. Product identities
+are enumerated from the start and become available only when their visual
+implementation is complete; ADR-021 makes NERV the first such theme.
 
 The normal menu is Back, Codex, Meeting, Theme, and Device. Theme and the A+B
 two-second chord open the same manager-backed selector.
@@ -178,3 +178,21 @@ horizontal compositions where practical.
 
 **Reason:** Preserve trust and product meaning while allowing strong visual
 identities.
+
+## ADR-021 — NERV is the first portrait-first product theme
+
+**Decision:** Make NERV the first selectable product theme. It uses a static
+`NervTheme` style plus reusable shared-renderer primitives for a 135 x 240
+stacked portrait composition, angular frames, segmented progress, a narrow side
+rail, and a small locally drawn fig-leaf/`NERV` mark. No external logo bitmap or
+new font dependency is embedded.
+
+NERV renders only `CompanionUiModel` values, keeps unknown values explicit, and
+reserves yellow and red for real warning and error semantics. Plain remains the
+fallback; Ghost HUD, Pip-Boy, Alien Terminal, and Gundam Cockpit remain
+unavailable. Existing system screens remain readable in landscape using the
+active palette. Portrait spacing and emblem scale remain provisional pending
+physical review, and a polished landscape NERV composition is deferred.
+
+**Reason:** Deliver one complete visual identity for hardware evaluation while
+preserving a single data model, renderer, screen flow, and persistence path.

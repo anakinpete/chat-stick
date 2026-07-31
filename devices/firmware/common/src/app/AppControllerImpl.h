@@ -1952,7 +1952,7 @@ void AppController::renderIfNeeded() {
     _display.renderCompanion(buildCompanionUi(), _themeManager.activeStyle(),
                              now);
   } else {
-    _display.render(buildDisplayState());
+    _display.render(buildDisplayState(), _themeManager.activeStyle());
   }
   _renderInProgress = false;
 }

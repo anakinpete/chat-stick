@@ -60,8 +60,8 @@ on hardware.
 
 ## Phase 4 — Theme engine and selector
 
-Status: theme contract, manager, persistence, selector, and companion input
-mapping implemented; product-theme visuals pending.
+Status: theme contract, manager, persistence, selector, companion input, and
+the first NERV visual implementation are complete; remaining visuals pending.
 
 1. Add `ThemeId` and `ThemeManager`.
 2. Extract palette, typography, frame, alert, icon, and progress styling.
@@ -73,10 +73,10 @@ mapping implemented; product-theme visuals pending.
 Exit condition: the plain renderer can switch visual themes without changing data or behavior.
 
 `ThemeId`, `ThemeStyle`, `BaseTheme`, semantic presentation helpers, and
-`ThemeManager` are implemented. Plain is the only selectable implementation;
-the five product identities appear as `[soon]`. The menu and hold-A+B paths use
-the same selector. Runtime factory reset now uses the confirmed Device-menu
-route rather than the selector chord.
+`ThemeManager` are implemented. Plain and NERV are selectable; the other four
+product identities appear as `[soon]`. The menu and hold-A+B paths use the same
+selector. Runtime factory reset uses the confirmed Device-menu route rather
+than the selector chord.
 
 ## Phase 5 — Five polished product themes
 
@@ -95,6 +95,12 @@ For each theme:
 - progress and alerts are complete;
 - no theme-specific business logic exists;
 - build and device test pass before starting the next theme.
+
+NERV now has its first complete portrait-first implementation and is pending
+physical visual review. Font scale, spacing, panel height, emblem size,
+progress segmentation, marquee bounds, and palette values remain deliberately
+centralized for that tuning pass. Ghost HUD, Pip-Boy, Alien / Weyland-Yutani,
+and Gundam Cockpit remain unimplemented.
 
 ## Phase 6 — Live data integration and resilience
 

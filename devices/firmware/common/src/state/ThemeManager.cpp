@@ -1,6 +1,7 @@
 #include "ThemeManager.h"
 
 #include "BaseTheme.h"
+#include "NervTheme.h"
 #include "services/SettingsStore.h"
 
 namespace {
@@ -13,7 +14,7 @@ struct ThemeDescriptor {
 
 constexpr ThemeDescriptor kThemes[] = {
     {ThemeId::Plain, "plain", "Plain", true},
-    {ThemeId::Nerv, "nerv", "NERV", false},
+    {ThemeId::Nerv, "nerv", "NERV", true},
     {ThemeId::GhostHud, "ghost", "Ghost HUD", false},
     {ThemeId::PipBoy, "pip-boy", "Pip-Boy", false},
     {ThemeId::AlienTerminal, "alien", "Alien Terminal", false},
@@ -36,9 +37,13 @@ void ThemeManager::init(const SettingsStore &settings) {
 }
 
 const ThemeStyle &ThemeManager::activeStyle() const {
-  // Plain is the only implemented style. Unavailable ids can never become
-  // active, and this fallback keeps rendering safe if that invariant changes.
-  return baseThemeStyle();
+  switch (_activeTheme) {
+  case ThemeId::Nerv:
+    return nervThemeStyle();
+  case ThemeId::Plain:
+  default:
+    return baseThemeStyle();
+  }
 }
 
 int ThemeManager::availableThemeCount() const {

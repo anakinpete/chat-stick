@@ -90,14 +90,15 @@ void TextDisplay::setBrightness(uint8_t brightness) {
   }
 }
 
-void TextDisplay::render(const DisplayState &state) {
+void TextDisplay::render(const DisplayState &state, const ThemeStyle &theme) {
   _companionRenderer.reset();
+  ensureOrientation(ThemeOrientation::Landscape);
   if (_canvasReady) {
-    _canvas.fillScreen(COLOR_BLACK);
+    _canvas.fillScreen(theme.palette.background);
     _canvas.setFont(&fonts::AsciiFont8x16);
     _canvas.setTextSize(1);
   } else {
-    M5.Display.fillScreen(COLOR_BLACK);
+    M5.Display.fillScreen(theme.palette.background);
     M5.Display.setFont(&fonts::AsciiFont8x16);
     M5.Display.setTextSize(1);
   }
@@ -114,11 +115,12 @@ void TextDisplay::render(const DisplayState &state) {
   const bool hasFooterText =
       !state.footerLeft.isEmpty() || !state.footerRight.isEmpty();
   if (hasHeader) {
-    drawLine(0, mergeEdgeText(state.headerLeft, state.headerRight), COLOR_GRAY);
+    drawLine(0, mergeEdgeText(state.headerLeft, state.headerRight),
+             theme.palette.muted);
   }
 
   if (state.showMenu) {
-    drawMenu(state);
+    drawMenu(state, theme);
   } else {
     const int bodyStart = hasHeader ? 1 : 0;
     const int bodyEnd = kLines - 1;
@@ -132,7 +134,15 @@ void TextDisplay::render(const DisplayState &state) {
     const int pageCount = max(1, totalPages);
     const int safePageIndex =
         constrain(state.pageIndex, 0, max(0, pageCount - 1));
-    const uint16_t bodyColor = state.bodyDim ? COLOR_GRAY : COLOR_WHITE;
+    uint16_t bodyColor = state.bodyDim ? theme.palette.muted
+                                       : theme.palette.primary;
+    if (state.appState == AppState::Error) {
+      bodyColor = theme.palette.error;
+    } else if (state.appState == AppState::ConfirmReset) {
+      bodyColor = theme.palette.warning;
+    } else if (state.appState == AppState::Connecting) {
+      bodyColor = theme.palette.secondary;
+    }
 
     if (imagePage && safePageIndex == 0) {
       drawStoredImage();
@@ -151,7 +161,7 @@ void TextDisplay::render(const DisplayState &state) {
 
   if (hasFooterText) {
     drawLine(kFooterRow, mergeEdgeText(state.footerLeft, state.footerRight),
-             COLOR_GRAY);
+             theme.palette.muted);
   }
 
   if (_canvasReady) {
@@ -162,6 +172,7 @@ void TextDisplay::render(const DisplayState &state) {
 void TextDisplay::renderCompanion(const CompanionUiModel &model,
                                   const ThemeStyle &theme,
                                   unsigned long nowMs) {
+  ensureOrientation(theme.primitives.orientation);
   if (_canvasReady) {
     _canvas.fillScreen(theme.palette.background);
     _canvas.setFont(&fonts::AsciiFont8x16);
@@ -175,6 +186,30 @@ void TextDisplay::renderCompanion(const CompanionUiModel &model,
   _companionRenderer.render(_canvas, _canvasReady, model, theme, nowMs);
   if (_canvasReady) {
     flushCanvas();
+  }
+}
+
+void TextDisplay::ensureOrientation(ThemeOrientation orientation) {
+  if (_orientation == orientation) {
+    return;
+  }
+
+  if (_canvasReady) {
+    _canvas.deleteSprite();
+    _canvasReady = false;
+  }
+
+  _orientation = orientation;
+  const bool portrait = orientation == ThemeOrientation::Portrait;
+  M5.Display.setRotation(portrait ? 0 : 1);
+  _canvasWidth = portrait ? SCREEN_HEIGHT_PX : SCREEN_WIDTH_PX;
+  _canvasHeight = portrait ? SCREEN_WIDTH_PX : SCREEN_HEIGHT_PX;
+  _canvas.setColorDepth(16);
+  _canvasReady =
+      _canvas.createSprite(_canvasWidth, _canvasHeight) != nullptr;
+  _hasPreviousCanvas = false;
+  if (!_canvasReady) {
+    Serial.println("[Display] Orientation canvas unavailable; drawing direct");
   }
 }
 
@@ -427,13 +462,13 @@ void TextDisplay::flushCanvas(bool forceFull) {
     return;
   }
 
-  constexpr size_t kRowBytes = SCREEN_WIDTH_PX * sizeof(uint16_t);
-  int minY = SCREEN_HEIGHT_PX;
+  const size_t rowBytes = static_cast<size_t>(_canvasWidth) * sizeof(uint16_t);
+  int minY = _canvasHeight;
   int maxY = -1;
 
-  for (int y = 0; y < SCREEN_HEIGHT_PX; y++) {
-    const size_t offset = static_cast<size_t>(y) * SCREEN_WIDTH_PX;
-    if (memcmp(current + offset, _previousCanvas + offset, kRowBytes) == 0) {
+  for (int y = 0; y < _canvasHeight; y++) {
+    const size_t offset = static_cast<size_t>(y) * _canvasWidth;
+    if (memcmp(current + offset, _previousCanvas + offset, rowBytes) == 0) {
       continue;
     }
     minY = min(minY, y);
@@ -444,22 +479,22 @@ void TextDisplay::flushCanvas(bool forceFull) {
     return;
   }
 
-  int minX = SCREEN_WIDTH_PX;
+  int minX = _canvasWidth;
   int maxX = -1;
   for (int y = minY; y <= maxY; y++) {
-    const size_t offset = static_cast<size_t>(y) * SCREEN_WIDTH_PX;
+    const size_t offset = static_cast<size_t>(y) * _canvasWidth;
     const uint16_t *row = current + offset;
     const uint16_t *prev = _previousCanvas + offset;
-    if (memcmp(row, prev, kRowBytes) == 0) {
+    if (memcmp(row, prev, rowBytes) == 0) {
       continue;
     }
 
     int left = 0;
-    while (left < SCREEN_WIDTH_PX && row[left] == prev[left]) {
+    while (left < _canvasWidth && row[left] == prev[left]) {
       left++;
     }
 
-    int right = SCREEN_WIDTH_PX - 1;
+    int right = _canvasWidth - 1;
     while (right >= left && row[right] == prev[right]) {
       right--;
     }
@@ -475,7 +510,7 @@ void TextDisplay::flushCanvas(bool forceFull) {
   const int dirtyW = maxX - minX + 1;
   const int dirtyH = maxY - minY + 1;
   const int dirtyPixels = dirtyW * dirtyH;
-  const int screenPixels = SCREEN_WIDTH_PX * SCREEN_HEIGHT_PX;
+  const int screenPixels = _canvasWidth * _canvasHeight;
 
   if (dirtyPixels > screenPixels / 3) {
     _canvas.pushSprite(&M5.Display, 0, 0);
@@ -486,12 +521,12 @@ void TextDisplay::flushCanvas(bool forceFull) {
 
   for (int y = minY; y <= maxY; y++) {
     const uint16_t *row =
-        current + static_cast<size_t>(y) * SCREEN_WIDTH_PX + minX;
+        current + static_cast<size_t>(y) * _canvasWidth + minX;
     M5.Display.pushImage(minX, y, dirtyW, 1, row);
   }
 
   for (int y = minY; y <= maxY; y++) {
-    const size_t offset = static_cast<size_t>(y) * SCREEN_WIDTH_PX + minX;
+    const size_t offset = static_cast<size_t>(y) * _canvasWidth + minX;
     memcpy(_previousCanvas + offset, current + offset,
            dirtyW * sizeof(uint16_t));
   }
@@ -651,20 +686,22 @@ void TextDisplay::drawAlarm(const DisplayState &state) const {
   }
 }
 
-void TextDisplay::drawMenu(const DisplayState &state) const {
+void TextDisplay::drawMenu(const DisplayState &state,
+                           const ThemeStyle &theme) const {
   const int startRow = kLines - state.menuItemCount;
   for (int i = 0; i < state.menuItemCount; i++) {
     const int row = startRow + i;
     const bool selected = i == state.menuSelectedIndex;
     const String prefix = selected ? "> " : "  ";
     drawLine(row, prefix + state.menuItems[i],
-             selected ? COLOR_WHITE : COLOR_GRAY);
+             selected ? theme.palette.primary : theme.palette.muted);
   }
 
   if (state.menuHasMoreAbove) {
-    drawGlyphAtRight(startRow - 1 >= 1 ? startRow - 1 : 1, 'v', COLOR_GRAY);
+    drawGlyphAtRight(startRow - 1 >= 1 ? startRow - 1 : 1, 'v',
+                     theme.palette.muted);
   }
   if (state.menuHasMoreBelow) {
-    drawGlyphAtRight(kLines - 1, 'v', COLOR_GRAY);
+    drawGlyphAtRight(kLines - 1, 'v', theme.palette.muted);
   }
 }
