@@ -402,6 +402,7 @@ void AppController::loop() {
   processMenuFetches();
   processPower();
   processCaptivePortal();
+  processCompanionUi();
   renderIfNeeded();
   if (_appState != AppState::Playing) {
     delay(1);
@@ -856,6 +857,22 @@ void AppController::handleChatButtons() {
       clearToolText();
     }
     _screenDirty = true;
+  }
+
+  if (shouldRenderCompanion()) {
+    // Button A's press is deliberately consumed while waiting to distinguish
+    // the temporary short-click navigation action from hold-to-talk.
+    _buttonA.consumePressed();
+    if (_buttonA.consumeClick()) {
+      _buttonA.consumeReleased();
+      togglePrimaryScreen();
+      return;
+    }
+    if (_buttonA.consumeHoldStart()) {
+      startRecording();
+      return;
+    }
+    return;
   }
 
   if (_buttonA.consumePressed() &&
@@ -1761,6 +1778,36 @@ void AppController::processCaptivePortal() {
   connectNetworkStack();
 }
 
+void AppController::processCompanionUi() {
+  if (shouldRenderCompanion() && _display.companionNeedsFrame(millis())) {
+    _screenDirty = true;
+  }
+}
+
+bool AppController::shouldRenderCompanion() const {
+  return !_bootMode && _appRegion == AppRegion::Chat &&
+         _appState == AppState::Ready && !_wifi.isCaptivePortalActive();
+}
+
+const CompanionUiModel &AppController::buildCompanionUi() {
+  CompanionRuntimeSignals signals;
+  signals.currentTimeUnixSeconds = static_cast<int64_t>(time(nullptr));
+  signals.batteryPercentage = Board::batteryLevel();
+  signals.wifiConnected = _wifi.isConnected();
+  signals.backendConnected = _live.isConnected();
+  signals.backendConnecting =
+      _networkStackStarted && signals.wifiConnected && !signals.backendConnected;
+  return _companionDemoData.update(signals, _activePrimaryScreen);
+}
+
+void AppController::togglePrimaryScreen() {
+  _activePrimaryScreen = _activePrimaryScreen == PrimaryScreen::Codex
+                             ? PrimaryScreen::Meeting
+                             : PrimaryScreen::Codex;
+  _powerManager.registerActivity();
+  _screenDirty = true;
+}
+
 void AppController::renderIfNeeded() {
   if (!_screenDirty || _renderInProgress || !_displayReady) {
     return;
@@ -1780,7 +1827,11 @@ void AppController::renderIfNeeded() {
 
   _renderInProgress = true;
   _screenDirty = false;
-  _display.render(buildDisplayState());
+  if (shouldRenderCompanion()) {
+    _display.renderCompanion(buildCompanionUi(), now);
+  } else {
+    _display.render(buildDisplayState());
+  }
   _renderInProgress = false;
 }
 

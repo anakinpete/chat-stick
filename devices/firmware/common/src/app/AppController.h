@@ -9,6 +9,7 @@
 #include "services/SettingsStore.h"
 #include "services/TimerService.h"
 #include "services/WiFiService.h"
+#include "state/CompanionDemoData.h"
 #include "state/StateTypes.h"
 #include "ui/TextDisplay.h"
 #include "app/TurnController.h"
@@ -290,6 +291,12 @@ private:
   /// UI renderer.
   TextDisplay _display;
 
+  /// Development-only adapter for companion fields without live providers.
+  CompanionDemoData _companionDemoData;
+
+  /// Primary companion screen selected by the temporary navigation control.
+  PrimaryScreen _activePrimaryScreen = PrimaryScreen::Codex;
+
   /// Idle and power-state manager.
   PowerManager _powerManager;
 
@@ -494,8 +501,20 @@ private:
   /// Service captive-portal state transitions.
   void processCaptivePortal();
 
+  /// Schedule non-blocking companion animation frames.
+  void processCompanionUi();
+
   /// Render the UI when needed.
   void renderIfNeeded();
+
+  /// Whether the normal ready-state companion UI should be visible.
+  bool shouldRenderCompanion() const;
+
+  /// Build a companion snapshot from real signals and isolated demo content.
+  const CompanionUiModel &buildCompanionUi();
+
+  /// Toggle the temporary Codex/Meeting primary-screen selection.
+  void togglePrimaryScreen();
 
   /**
    * @brief Advance the reveal animation and repaint outside the main loop.

@@ -91,6 +91,7 @@ void TextDisplay::setBrightness(uint8_t brightness) {
 }
 
 void TextDisplay::render(const DisplayState &state) {
+  _companionRenderer.reset();
   if (_canvasReady) {
     _canvas.fillScreen(COLOR_BLACK);
     _canvas.setFont(&fonts::AsciiFont8x16);
@@ -156,6 +157,28 @@ void TextDisplay::render(const DisplayState &state) {
   if (_canvasReady) {
     flushCanvas();
   }
+}
+
+void TextDisplay::renderCompanion(const CompanionUiModel &model,
+                                  unsigned long nowMs) {
+  if (_canvasReady) {
+    _canvas.fillScreen(COLOR_BLACK);
+    _canvas.setFont(&fonts::AsciiFont8x16);
+    _canvas.setTextSize(1);
+  } else {
+    M5.Display.fillScreen(COLOR_BLACK);
+    M5.Display.setFont(&fonts::AsciiFont8x16);
+    M5.Display.setTextSize(1);
+  }
+
+  _companionRenderer.render(_canvas, _canvasReady, model, nowMs);
+  if (_canvasReady) {
+    flushCanvas();
+  }
+}
+
+bool TextDisplay::companionNeedsFrame(unsigned long nowMs) const {
+  return _companionRenderer.needsFrame(nowMs);
 }
 
 bool TextDisplay::setImage(const uint8_t *packed, size_t packedLen, int width,

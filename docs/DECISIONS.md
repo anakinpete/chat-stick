@@ -110,3 +110,21 @@ payload parsing remain outside the model.
 **Reason:** Freeze semantic meaning before the plain renderer and themes are
 built, without prematurely choosing providers or coupling application data to
 presentation details.
+
+## ADR-017 — Add a provisional plain companion renderer
+
+**Decision:** Render the shared companion model through a neutral two-screen
+renderer on the existing M5Stick canvas when the application is ready. Keep the
+legacy renderer for setup, menu, alarm, connection, recording, and error flows.
+
+Until live providers exist, populate the model through one isolated demo
+adapter that also accepts real time, battery, Wi-Fi, and backend signals.
+Meeting title and agenda use clipped, elapsed-time marquees with no delay loop.
+
+For hardware evaluation, short Button A toggles primary screens, holding Button
+A retains push-to-talk, and holding Button B retains the existing menu. This
+mapping and the renderer/widget geometry remain provisional until hardware
+review.
+
+**Reason:** Make the companion product inspectable on the real display without
+coupling presentation to providers or prematurely implementing themes.

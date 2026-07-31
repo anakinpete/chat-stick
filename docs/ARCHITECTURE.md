@@ -78,6 +78,21 @@ Responsible for:
 
 The renderer must not perform network requests or store credentials.
 
+The current plain implementation attaches beside the legacy `TextDisplay`
+path. `AppController` selects `CompanionRenderer` only for the normal ready
+view; boot, setup, menu, alarm, connection, recording, and error states keep
+using the established renderer. Both paths share the existing display canvas
+and dirty-frame flush.
+
+`CompanionDemoData` is a temporary adapter. It combines real clock, battery,
+Wi-Fi, and backend signals with clearly isolated weather, Codex, and meeting
+demo content. It can be replaced by provider-backed adapters without changing
+the renderer.
+
+`TextMarquee` owns only elapsed-time scroll state. It performs no drawing,
+delay, network access, or input handling. `CompanionRenderer` clips marquee
+drawing to the meeting title and agenda regions.
+
 ### Theme layer
 
 Responsible for visual tokens and visual primitives:
@@ -222,3 +237,7 @@ Before implementing the four themed renderers:
 5. then add themes one at a time.
 
 This prevents repeated theme rewrites while the data model is still changing.
+
+Steps 1 and 2 are implemented. Hardware verification of both screens and their
+text bounds is still required before steps 3 and 4 can freeze the renderer and
+widget contract.

@@ -28,6 +28,8 @@ Exit condition: a fresh or relocated device can be configured entirely from a ph
 
 ## Phase 2 — Freeze the MVP information model
 
+Status: implementation complete.
+
 1. Define shared header data: time and weather.
 2. Define Codex status and usage/progress semantics.
 3. Define Meeting/agenda semantics.
@@ -38,6 +40,8 @@ Exit condition: the UI can be driven by stable semantic data without theme-speci
 
 ## Phase 3 — Plain functional two-screen UI
 
+Status: implemented in firmware; physical display review pending.
+
 1. Implement one plain, highly readable base presentation.
 2. Display time and weather in the shared header.
 3. Display Codex/status and usage/progress.
@@ -47,6 +51,12 @@ Exit condition: the UI can be driven by stable semantic data without theme-speci
 7. Freeze the renderer and widget contract for the MVP.
 
 Exit condition: all core information and controls work before themed styling begins.
+
+The plain renderer, isolated demo adapter, and non-blocking meeting marquees
+are implemented. The temporary short-Button-A screen toggle is for evaluation
+only. Do not freeze the renderer/widget contract or begin Phase 4 until both
+screens, marquee timing, setup/menu reachability, and text bounds are reviewed
+on hardware.
 
 ## Phase 4 — Theme engine and selector
 

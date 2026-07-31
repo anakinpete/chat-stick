@@ -24,7 +24,8 @@ These items are deliberately unresolved. A coding agent must not silently choose
 
 ## Controls
 
-- What is the final normal-operation button mapping for moving between the two main screens?
+- What is the final normal-operation button mapping after the temporary
+  short-Button-A hardware test?
 - What exact boot gesture manually opens setup mode?
 - Does the theme selector wrap from the last theme to the first?
 - How does the user cancel the theme selector without changing selection?
@@ -41,7 +42,10 @@ These items are deliberately unresolved. A coding agent must not silently choose
 - Should Wi-Fi/backend state use icons, text, or both?
 - What is the target screen orientation?
 - What minimum font size fits the physical display?
-- What speed, pause, and repeat behavior should the non-blocking text marquee use?
+- Does hardware review confirm the provisional 28 px/s marquee speed with
+  900 ms start and 800 ms end pauses?
+- Do the plain renderer's text bounds and font remain readable on the physical
+  display without overlap or clipping?
 
 ## Backend and deployment
 

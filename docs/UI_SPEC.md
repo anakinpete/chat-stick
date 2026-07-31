@@ -68,9 +68,9 @@ drawHeader(data.header, activeTheme);
 drawMeetingScreen(data.meeting, activeTheme);
 ```
 
-The model preserves full title and agenda strings. A later renderer may present
-long strings with a non-blocking horizontal marquee; it must not truncate them
-in the data layer.
+The model preserves full title and agenda strings. The plain renderer presents
+long meeting title and agenda strings with a non-blocking horizontal marquee;
+it does not truncate them in the data layer.
 
 ## Shared semantic model
 
@@ -115,6 +115,14 @@ During normal operation:
 ### Primary-screen navigation
 
 The exact normal-operation mapping for switching between Codex and Meeting screens has not yet been explicitly frozen. Do not silently assign a final mapping in a large implementation task. A temporary mapping may be used only when called out in the task and documented afterward.
+
+For plain-renderer hardware evaluation only:
+
+- short press Button A toggles Codex and Meeting;
+- hold Button A retains push-to-talk behavior;
+- hold Button B retains the existing device-menu behavior.
+
+This is temporary and does not resolve the final normal-operation mapping.
 
 ### Setup-mode entry
 
@@ -201,6 +209,25 @@ Themes must not:
 - Long title and agenda scrolling must be non-blocking.
 - Do not let decorative animation delay input or networking.
 - Avoid theme-specific wording unless it is purely a label style and does not change meaning.
+
+## Plain renderer implementation
+
+The current base renderer uses the existing 240 x 135 landscape canvas and
+8 x 16 platform font. It has one shared header, one screen-specific content
+area, and a compact navigation footer.
+
+Meeting title and agenda marquees:
+
+- remain static when the text fits;
+- pause for 900 ms before moving;
+- advance from elapsed time at 28 pixels per second;
+- pause for 800 ms at the end;
+- restart cleanly without blocking the main loop;
+- clip all drawing to their assigned row.
+
+These timing and layout choices remain provisional until physical hardware
+review. The semantic model is frozen, but the renderer/widget contract is not
+yet permanently frozen.
 
 ## Deferred visual features
 

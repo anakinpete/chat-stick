@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Config.h"
+#include "CompanionRenderer.h"
 #include "state/StateTypes.h"
 #include <Arduino.h>
 #include <M5Unified.h>
@@ -26,6 +27,8 @@ public:
   void init();
   void setBrightness(uint8_t brightness);
   void render(const DisplayState &state);
+  void renderCompanion(const CompanionUiModel &model, unsigned long nowMs);
+  bool companionNeedsFrame(unsigned long nowMs) const;
   int pageCountForText(const String &text) const;
   String layoutTextForReveal(const String &text) const;
   int wrappedRowCount(const String &text) const;
@@ -51,6 +54,7 @@ private:
   size_t _imageBufferSize = 0;
   int _imageWidth = 0;
   int _imageHeight = 0;
+  CompanionRenderer _companionRenderer;
 
   String fitLine(const String &text) const;
   String mergeEdgeText(const String &left, const String &right) const;
