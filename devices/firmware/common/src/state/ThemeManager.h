@@ -17,6 +17,8 @@ public:
 
   int availableThemeCount() const;
   ThemeId availableThemeAt(int index) const;
+  int themeCount() const;
+  ThemeId themeAt(int index) const;
   const char *displayName(ThemeId id) const;
 
   bool activate(ThemeId id, SettingsStore &settings);

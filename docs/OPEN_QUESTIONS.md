@@ -24,15 +24,7 @@ These items are deliberately unresolved. A coding agent must not silently choose
 
 ## Controls
 
-- What is the final normal-operation button mapping after the temporary
-  short-Button-A hardware test?
 - What exact boot gesture manually opens setup mode?
-- Does the theme selector wrap from the last theme to the first?
-- How does the user cancel the theme selector without changing selection?
-- Should the final selector show unavailable theme names or only implemented
-  themes?
-- Which control replaces the current both-button factory-reset chord before
-  the agreed hold-both-buttons theme selector is enabled?
 
 ## Setup portal
 
@@ -52,6 +44,8 @@ These items are deliberately unresolved. A coding agent must not silently choose
   display without overlap or clipping?
 - Which final glyph set can represent battery, weather, and connection states
   clearly across all themes on the available fonts?
+- Does hardware review confirm the selector paging, `[soon]` labels, active
+  marker, and two-second chord timing?
 
 ## Backend and deployment
 

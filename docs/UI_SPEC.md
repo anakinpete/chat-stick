@@ -114,15 +114,14 @@ During normal operation:
 
 ### Primary-screen navigation
 
-The exact normal-operation mapping for switching between Codex and Meeting screens has not yet been explicitly frozen. Do not silently assign a final mapping in a large implementation task. A temporary mapping may be used only when called out in the task and documented afterward.
+Normal companion operation uses:
 
-For plain-renderer hardware evaluation only:
-
-- short press Button A toggles Codex and Meeting;
-- hold Button A retains push-to-talk behavior;
-- hold Button B retains the existing device-menu behavior.
-
-This is temporary and does not resolve the final normal-operation mapping.
+- short Button A toggles Codex and Meeting;
+- holding Button A alone performs no action and does not start legacy
+  push-to-talk;
+- holding Button B opens the companion menu;
+- holding A and B together for approximately two seconds opens the theme
+  selector without leaking either individual-button action.
 
 ### Companion menu
 
@@ -135,9 +134,10 @@ The normal companion menu is:
 - Device.
 
 Legacy conversation actions are not presented as primary companion actions.
-The Device submenu and setup access remain unchanged. The Theme entry currently
-shows manager-reported available themes; only the safe Plain theme is available
-until later theme implementations are added.
+The Device submenu and setup access remain reachable. Theme opens the same
+selector as the A+B chord. Factory reset is available only through the Device
+menu with confirmation during normal operation; the runtime two-button chord
+does not erase settings.
 
 ### Setup-mode entry
 
@@ -150,13 +150,19 @@ Minimum first version:
 ```text
 SELECT THEME
 
-> NERV
-  GHOST
-  PIP-BOY
-  LCARS
+> Cancel
+  Plain *
+  NERV [soon]
+  Ghost HUD [soon]
 ```
 
-Later enhancement:
+Button B moves and wraps through the complete list. Button A confirms an
+available entry. Cancel, or holding Button B to return, closes the selector
+without changing the active theme. The active theme has a `*` marker. The five
+unfinished product themes are visible as `[soon]` and cannot be selected;
+Plain is the currently available internal fallback.
+
+Later enhancement after each visual implementation:
 
 - preview the highlighted theme before confirmation.
 
@@ -201,8 +207,8 @@ Themes must not:
 ### NERV-style
 
 - black base;
-- orange as the dominant signal colour;
-- technical labels and warning-panel character;
+- orange/red/yellow signal colours;
+- angular technical labels and warning-panel character;
 - strong caution and critical-state treatment;
 - dense appearance without sacrificing legibility.
 
@@ -211,21 +217,29 @@ Themes must not:
 - cyan-dominant telemetry;
 - thin lines and restrained frames;
 - clean spacing;
-- precise, quiet, high-tech character.
+- precise, quiet, high-tech character;
+- translucent or radar-like visual language that remains distinct from Pip-Boy.
 
 ### Pip-Boy-style
 
 - green monochrome presentation;
 - pixel-oriented typography or treatment;
 - optional subtle scanlines;
-- chunky, readable gauges and progress indicators.
+- phosphor/CRT character;
+- chunky, readable gauges and progress indicators, intentionally heavier than Ghost HUD.
 
-### LCARS-style
+### Alien / Weyland-Yutani-inspired
 
-- rounded coloured panels;
-- clear hierarchy and large readable labels;
-- distinctive segmented controls and framing;
-- colour used to organize, not decorate randomly.
+- muted amber, green, off-white, and dark industrial colours;
+- utilitarian terminal layout with grids and compact labels;
+- warning stripes and functional corporate spacecraft-computer character.
+
+### Gundam cockpit-inspired
+
+- blue/white base with red/yellow accents;
+- angular cockpit instrumentation and strong system-status framing;
+- mechanical and targeting icon language;
+- energetic presentation that remains readable.
 
 ## Cross-theme consistency rules
 
@@ -237,6 +251,9 @@ Themes must not:
 - Long title and agenda scrolling must be non-blocking.
 - Do not let decorative animation delay input or networking.
 - Avoid theme-specific wording unless it is purely a label style and does not change meaning.
+- Show real product data only; decorative motifs must not invent telemetry.
+- Represent unknown values honestly in every theme.
+- Support the same semantics in vertical and horizontal compositions where practical.
 
 ## Plain renderer implementation
 
@@ -268,4 +285,4 @@ yet permanently frozen.
 - full animated transitions between screens;
 - random theme on boot;
 - day/night variants;
-- Alien, Omnitool, Gundam, Halo, and Blade Runner themes.
+- themes beyond the agreed five-theme product set.

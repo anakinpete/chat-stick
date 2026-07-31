@@ -56,14 +56,16 @@ The same two-screen structure and data model are retained across themes. Each th
 - alert style;
 - progress-bar style.
 
-The first release should contain four polished themes:
+The finished product theme set is:
 
-1. **NERV-style** — orange and black, dense technical warning panels.
-2. **Ghost-style HUD** — cyan, thin lines, restrained telemetry.
-3. **Pip-Boy-style** — green monochrome, pixel character, optional scanline treatment.
-4. **LCARS-style** — rounded coloured panels, strong hierarchy, high readability.
+1. **NERV-inspired** — black with orange/red/yellow signals and angular warning panels.
+2. **Ghost HUD-inspired** — cyan/blue, thin lines, clean tactical telemetry.
+3. **Pip-Boy-inspired** — green monochrome, chunky retro presentation, optional subtle scanlines.
+4. **Alien / Weyland-Yutani-inspired** — muted industrial terminal colours, grids, warning stripes, and compact labels.
+5. **Gundam cockpit-inspired** — blue/white instrumentation with red/yellow accents and mechanical framing.
 
-Future candidates include Alien, Omnitool, Gundam, Halo, and Blade Runner.
+Plain is an internal development and safe-fallback theme, not a sixth product
+theme. LCARS is not part of the active plan.
 
 ## Agreed theme control
 
@@ -72,19 +74,21 @@ During normal operation, hold both buttons for about two seconds to open the the
 ```text
 SELECT THEME
 
-> NERV
-  GHOST
-  PIP-BOY
-  LCARS
+> Cancel
+  Plain *
+  NERV [soon]
+  Ghost HUD [soon]
 ```
 
 Inside the selector:
 
 - Button B moves to the next item;
 - Button A selects;
+- the list wraps and Cancel returns without changing the active theme;
 - the selected theme is stored in ESP32 Preferences and survives restart.
 
-A theme preview is planned after basic selection works.
+Unfinished product themes remain visible as unavailable `[soon]` entries. They
+will be enabled one at a time as their full visual implementations are reviewed.
 
 ## Agreed configuration direction
 
@@ -124,24 +128,22 @@ At the time of this document revision:
 - Wi-Fi connectivity works using development credentials;
 - the local backend runs on port `8787`;
 - the device has reached the local backend;
-- the browser setup portal and custom theme engine have not yet been implemented.
+- persistent settings and the browser setup portal are implemented;
+- the shared UI model, plain renderer, theme contract, manager, and runtime
+  selector are implemented;
+- the five product-theme visuals have not yet been implemented.
 
 ## Immediate next milestone
 
-Implement persistent device settings and the browser-based Wi-Fi/backend setup portal while preserving the working firmware and network path.
-
-After that:
-
-1. define and freeze the shared UI data contract;
-2. build one plain functional renderer;
-3. extract the theme interface and manager;
-4. add the four themes one at a time.
+Review the plain renderer and selector on hardware, then implement and review
+the five product themes one at a time without changing the shared data model,
+screen flow, or input behavior.
 
 ## Deferred until after the MVP
 
 - random theme on boot;
 - day/night mode;
 - animated screen transitions;
-- additional themes beyond the initial four;
+- additional themes beyond the agreed five;
 - optional AI summaries or chat features;
 - broad smartwatch-style functionality.

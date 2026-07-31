@@ -151,7 +151,8 @@ src/
     NervTheme.*
     GhostTheme.*
     PipBoyTheme.*
-    LcarsTheme.*
+    AlienTheme.*
+    GundamTheme.*
   networking/
     WifiManager.*
     SetupPortal.*
@@ -162,10 +163,13 @@ File names may be adjusted to fit the existing code. The separation of responsib
 
 ## Theme interface
 
-`ThemeId` reserves Plain, NERV, Ghost HUD, Pip-Boy, and LCARS identities.
-Only Plain is currently available. The style contract uses static token data
-rather than virtual renderer classes, which fits the current memory constraints
-and keeps one Codex/Meeting implementation.
+`ThemeId` contains Plain, NERV, Ghost HUD, Pip-Boy, Alien Terminal, and Gundam
+Cockpit. Stable persistence identifiers are `plain`, `nerv`, `ghost`,
+`pip-boy`, `alien`, and `gundam`. Plain is internal and currently the only
+available implementation; the five product identities enumerate as unavailable
+until their visual styles are completed. The style contract uses static token
+data rather than virtual renderer classes, which fits the current memory
+constraints and keeps one Codex/Meeting implementation.
 
 The renderer receives the active `ThemeStyle` for each frame. It owns field
 order, layout, state handling, and marquee behavior; the theme owns visual
@@ -182,10 +186,19 @@ The theme manager should:
 - save a confirmed selection through the settings store;
 - fall back to a known base theme when a value is invalid.
 
-These responsibilities are now implemented. Identifier parsing and
-availability validation have one mapping in `ThemeManager`; `SettingsStore`
-uses that mapping and remains the only Preferences owner. Recognized but
-unimplemented theme identifiers also fall back to Plain.
+These responsibilities are now implemented. Identifier parsing, labels,
+enumeration, and availability validation have one descriptor mapping in
+`ThemeManager`; `SettingsStore` remains the only Preferences owner. Invalid or
+recognized-but-unimplemented persisted identifiers fall back to Plain. The
+selector lists all identities, marks unavailable entries `[soon]`, and persists
+only a confirmed available selection.
+
+Normal companion input consumes the A+B hold before individual button actions.
+It suppresses events until both buttons are released, preventing screen toggle,
+menu opening, or stale selector input. Short A changes the primary screen, hold
+B opens the menu, and hold A alone is deliberately inactive. Runtime factory
+reset is routed through the Device menu confirmation instead of a destructive
+button chord.
 
 ## Persistent settings
 
@@ -223,7 +236,7 @@ Use a settings abstraction rather than scattering direct Preferences calls throu
 
 ## Data contract freeze point
 
-Before implementing the four themed renderers:
+Before implementing the five product theme styles:
 
 1. define the semantic fields for header, Codex, and Meeting data;
 2. implement them in a plain base UI;

@@ -759,6 +759,14 @@ void AppController::handleButtons() {
   _buttonA.update(Board::buttonAIsPressed(), now);
   _buttonB.update(Board::buttonBIsPressed(), now);
 
+  if (_suppressButtonsUntilRelease) {
+    clearButtonEvents();
+    if (!_buttonA.isPressed() && !_buttonB.isPressed()) {
+      _suppressButtonsUntilRelease = false;
+    }
+    return;
+  }
+
   if (_appState == AppState::ConfirmReset) {
     if (_buttonA.consumeClick()) {
       beginFactoryReset();
@@ -770,10 +778,17 @@ void AppController::handleButtons() {
       _statusText = _resetReturnStatus;
       _errorText = _resetReturnError;
       _errorCategory = _resetReturnCategory;
-      _appRegion = AppRegion::Chat;
+      _appRegion = _resetReturnRegion;
+      _menuState = _resetReturnMenuState;
+      _menuSelection = _resetReturnMenuSelection;
+      clearButtonEvents();
+      _suppressButtonsUntilRelease = true;
       _screenDirty = true;
       return;
     }
+
+    clearButtonEvents();
+    return;
   }
 
   if (_appState == AppState::Alarm) {
@@ -781,23 +796,35 @@ void AppController::handleButtons() {
     return;
   }
 
-  if (_buttonA.isPressed() && _buttonB.isPressed()) {
-    if (_resetHoldStartMs == 0) {
-      _resetHoldStartMs = now;
-    } else if (now - _resetHoldStartMs >= kResetHoldMs &&
-               _appState != AppState::Recording &&
-               _appState != AppState::ConfirmReset) {
-      _resetReturnState = _appState;
-      _resetReturnStatus = _statusText;
-      _resetReturnError = _errorText;
-      _resetReturnCategory = _errorCategory;
-      setAppState(AppState::ConfirmReset, "Factory reset?");
-      _errorText = "A confirm  B cancel";
-      _screenDirty = true;
+  if (_manualSetupPortalActive && _wifi.isCaptivePortalActive()) {
+    if (_buttonB.consumeHoldStart()) {
+      cancelManualCaptivePortalFlow();
       return;
     }
-  } else {
-    _resetHoldStartMs = 0;
+    clearButtonEvents();
+    return;
+  }
+
+  const bool bothButtonsPressed =
+      _buttonA.isPressed() && _buttonB.isPressed();
+  if (shouldRenderCompanion() && bothButtonsPressed) {
+    if (_themeChordStartMs == 0) {
+      _themeChordStartMs = now;
+    }
+    clearButtonEvents();
+    if (now - _themeChordStartMs >= kThemeSelectorHoldMs) {
+      _themeChordStartMs = 0;
+      _suppressButtonsUntilRelease = true;
+      openThemeSelector(false);
+    }
+    return;
+  }
+
+  if (_themeChordStartMs != 0) {
+    _themeChordStartMs = 0;
+    _suppressButtonsUntilRelease = true;
+    clearButtonEvents();
+    return;
   }
 
   if (_powerManager.isInterruptible() &&
@@ -861,18 +888,17 @@ void AppController::handleChatButtons() {
   }
 
   if (shouldRenderCompanion()) {
-    // Button A's press is deliberately consumed while waiting to distinguish
-    // the temporary short-click navigation action from hold-to-talk.
+    // Normal companion mode has no push-to-talk action. A short click changes
+    // screens; hold/release events are consumed without side effects.
     _buttonA.consumePressed();
     if (_buttonA.consumeClick()) {
       _buttonA.consumeReleased();
       togglePrimaryScreen();
       return;
     }
-    if (_buttonA.consumeHoldStart()) {
-      startRecording();
-      return;
-    }
+    _buttonA.consumeHoldStart();
+    _buttonA.consumeHoldRelease();
+    _buttonA.consumeReleased();
     return;
   }
 
@@ -932,6 +958,21 @@ void AppController::openMenu(MenuState state) {
   _screenDirty = true;
 }
 
+void AppController::openThemeSelector(bool fromMenu) {
+  _themeSelectorOpenedFromMenu = fromMenu;
+  openMenu(MenuState::Theme);
+  _powerManager.registerActivity();
+  _screenDirty = true;
+}
+
+void AppController::cancelThemeSelector() {
+  if (_themeSelectorOpenedFromMenu) {
+    openMenu(MenuState::Home);
+  } else {
+    closeMenu();
+  }
+}
+
 void AppController::closeMenu() {
   _appRegion = AppRegion::Chat;
   _menuState = MenuState::Home;
@@ -941,6 +982,11 @@ void AppController::closeMenu() {
 }
 
 void AppController::navigateBackFromMenu() {
+  if (_menuState == MenuState::Theme) {
+    cancelThemeSelector();
+    return;
+  }
+
   if (_menuState == MenuState::Home) {
     closeMenu();
     return;
@@ -979,7 +1025,7 @@ void AppController::selectCurrentMenuItem() {
       closeMenu();
       return;
     case 3:
-      openMenu(MenuState::Theme);
+      openThemeSelector(true);
       return;
     case 4:
       openMenu(MenuState::Device);
@@ -988,16 +1034,25 @@ void AppController::selectCurrentMenuItem() {
       return;
     }
 
-  case MenuState::Theme:
+  case MenuState::Theme: {
     if (_menuSelection == 0) {
-      openMenu(MenuState::Home);
+      cancelThemeSelector();
       return;
     }
-    if (_themeManager.activate(
-            _themeManager.availableThemeAt(_menuSelection - 1), _settings)) {
+    if (_menuSelection - 1 >= _themeManager.themeCount()) {
+      return;
+    }
+    const ThemeId selectedTheme =
+        _themeManager.themeAt(_menuSelection - 1);
+    if (!ThemeManager::isAvailable(selectedTheme)) {
+      _screenDirty = true;
+      return;
+    }
+    if (_themeManager.activate(selectedTheme, _settings)) {
       closeMenu();
     }
     return;
+  }
 
   case MenuState::Device:
     if (_menuSelection == 0) {
@@ -1006,7 +1061,7 @@ void AppController::selectCurrentMenuItem() {
     }
     if (_menuSelection == 1) {
       closeMenu();
-      startCaptivePortalFlow();
+      startCaptivePortalFlow(true);
       return;
     }
     if (_menuSelection == 2) {
@@ -1022,6 +1077,11 @@ void AppController::selectCurrentMenuItem() {
     }
     if (_menuSelection ==
         (Board::capabilities().externalSpeakerSwitch ? 4 : 3)) {
+      requestFactoryReset();
+      return;
+    }
+    if (_menuSelection ==
+        (Board::capabilities().externalSpeakerSwitch ? 5 : 4)) {
       performPowerOff();
       return;
     }
@@ -1063,9 +1123,9 @@ int AppController::menuItemCount() const {
   case MenuState::Home:
     return 5;
   case MenuState::Theme:
-    return 1 + _themeManager.availableThemeCount();
+    return 1 + _themeManager.themeCount();
   case MenuState::Device:
-    return Board::capabilities().externalSpeakerSwitch ? 5 : 4;
+    return Board::capabilities().externalSpeakerSwitch ? 6 : 5;
   case MenuState::ResumeChat:
     return _historyCount > 0 ? 1 + _historyCount : 2;
   case MenuState::Updates:
@@ -1083,7 +1143,7 @@ String AppController::menuTitle() const {
   case MenuState::Home:
     return "Companion";
   case MenuState::Theme:
-    return "Theme";
+    return "Select theme";
   case MenuState::Device:
     return "Device";
   case MenuState::ResumeChat:
@@ -1114,13 +1174,15 @@ String AppController::menuItemLabel(int index) const {
 
   case MenuState::Theme:
     if (index == 0) {
-      return "Back";
+      return "Cancel";
     }
-    if (index - 1 < _themeManager.availableThemeCount()) {
-      const ThemeId id = _themeManager.availableThemeAt(index - 1);
+    if (index - 1 < _themeManager.themeCount()) {
+      const ThemeId id = _themeManager.themeAt(index - 1);
       String label = _themeManager.displayName(id);
       if (id == _themeManager.activeTheme()) {
         label += " *";
+      } else if (!ThemeManager::isAvailable(id)) {
+        label += " [soon]";
       }
       return label;
     }
@@ -1141,6 +1203,9 @@ String AppController::menuItemLabel(int index) const {
                                             : "Speaker: internal";
     }
     if (index == (Board::capabilities().externalSpeakerSwitch ? 4 : 3)) {
+      return "Factory reset";
+    }
+    if (index == (Board::capabilities().externalSpeakerSwitch ? 5 : 4)) {
       return "Turn off";
     }
     return "";
@@ -1296,12 +1361,17 @@ void AppController::startFreshConversation() {
   _live.connect();
 }
 
-void AppController::startCaptivePortalFlow() {
+void AppController::startCaptivePortalFlow(bool allowCancel) {
   _live.disconnect();
+  _manualSetupPortalActive = false;
   if (_wifi.startCaptivePortal()) {
+    _manualSetupPortalActive = allowCancel;
+    _appRegion = AppRegion::Chat;
     setAppState(AppState::Connecting, "WiFi setup");
     setToolTextImmediate("Join AP\n" + _wifi.captivePortalSsid() + "\nOpen " +
-                         _wifi.captivePortalIp() + "\nSubmit WiFi form");
+                         _wifi.captivePortalIp() + "\nSubmit WiFi form" +
+                         (allowCancel ? "\nHold B: Cancel" : ""));
+    _suppressButtonsUntilRelease = true;
   } else {
     setErrorState(ErrorCategory::WiFiTimeout, "Portal failed",
                   "Could not start setup AP");
@@ -1810,6 +1880,7 @@ void AppController::processCaptivePortal() {
     return;
   }
 
+  _manualSetupPortalActive = false;
   setToolTextImmediate("Saved WiFi\n" + ssid + "\nReconnecting...");
   connectNetworkStack();
 }
@@ -1842,6 +1913,20 @@ void AppController::togglePrimaryScreen() {
                              : PrimaryScreen::Codex;
   _powerManager.registerActivity();
   _screenDirty = true;
+}
+
+void AppController::cancelManualCaptivePortalFlow() {
+  if (!_manualSetupPortalActive || !_wifi.isCaptivePortalActive()) {
+    return;
+  }
+
+  _manualSetupPortalActive = false;
+  _wifi.stopCaptivePortal();
+  setToolTextImmediate("");
+  clearButtonEvents();
+  _suppressButtonsUntilRelease = true;
+  _powerManager.registerActivity();
+  connectNetworkStack();
 }
 
 void AppController::renderIfNeeded() {
@@ -1938,6 +2023,11 @@ String AppController::buildBodyText() const {
     return _bootLog.isEmpty() ? String("Starting...") : _bootLog;
   }
 
+  if (_appState == AppState::ConfirmReset) {
+    return "Factory reset?\nClears local preferences.\nKeeps WiFi, backend, "
+           "theme.\n\nA: Confirm\nB: Cancel";
+  }
+
   if (!_toolText.isEmpty()) {
     return _toolText;
   }
@@ -1977,8 +2067,7 @@ String AppController::buildBodyText() const {
     return "";
 
   case AppState::ConfirmReset:
-    return "Are you sure? Reset will remove data and restart into the last "
-           "working version. WiFi credentials are kept.";
+    return "";
 
   case AppState::Error:
     switch (_errorCategory) {
@@ -2070,6 +2159,23 @@ String AppController::deviceStatusJson() const {
   String json;
   serializeJson(status, json);
   return json;
+}
+
+void AppController::requestFactoryReset() {
+  _resetReturnState = _appState;
+  _resetReturnStatus = _statusText;
+  _resetReturnError = _errorText;
+  _resetReturnCategory = _errorCategory;
+  _resetReturnRegion = _appRegion;
+  _resetReturnMenuState = _menuState;
+  _resetReturnMenuSelection = _menuSelection;
+
+  _appRegion = AppRegion::Chat;
+  setAppState(AppState::ConfirmReset, "Factory reset?");
+  _errorText = "A: Confirm  B: Cancel";
+  clearButtonEvents();
+  _suppressButtonsUntilRelease = true;
+  _screenDirty = true;
 }
 
 void AppController::beginFactoryReset() {

@@ -48,11 +48,15 @@
 
 **Reason:** It is suitable for small persistent values and avoids scattering storage calls throughout the firmware.
 
-## ADR-009 — Four themes for the MVP
+## ADR-009 — Five product themes
 
-**Decision:** Release first with NERV, Ghost HUD, Pip-Boy, and LCARS.
+**Decision:** The finished product set is NERV-inspired, Ghost HUD-inspired,
+Pip-Boy-inspired, Alien / Weyland-Yutani-inspired, and Gundam
+cockpit-inspired. Plain is an internal fallback; LCARS is removed from the
+active plan.
 
-**Reason:** Four polished themes are more valuable than ten incomplete themes.
+**Reason:** These five distinct identities cover the agreed visual directions
+while retaining one shared renderer and data model.
 
 ## ADR-010 — Class-based theme direction
 
@@ -70,7 +74,7 @@
 
 **Decision:** First make one plain functional two-screen UI and freeze its semantic renderer contract before implementing themes.
 
-**Reason:** Prevent repeated rework across four themes while core data and layout are still changing.
+**Reason:** Prevent repeated rework across five themes while core data and layout are still changing.
 
 ## ADR-013 — Codex-first, small-task workflow
 
@@ -121,9 +125,9 @@ Until live providers exist, populate the model through one isolated demo
 adapter that also accepts real time, battery, Wi-Fi, and backend signals.
 Meeting title and agenda use clipped, elapsed-time marquees with no delay loop.
 
-For hardware evaluation, short Button A toggles primary screens, holding Button
-A retains push-to-talk, and holding Button B retains the existing menu. This
-mapping and the renderer/widget geometry remain provisional until hardware
+Short Button A toggles primary screens and holding Button B opens the companion
+menu. Holding Button A alone does not start legacy push-to-talk in normal
+companion mode. Renderer/widget geometry remains provisional until hardware
 review.
 
 **Reason:** Make the companion product inspectable on the real display without
@@ -136,14 +140,41 @@ containing presentation-only palette, typography, spacing, border, progress,
 and semantic-symbol tokens. Use `SemanticPresentation` for shared human-readable
 state labels.
 
-`ThemeManager` centrally maps identifiers, exposes available themes, loads the
-saved selection through `SettingsStore`, and falls back to Plain for invalid or
+`ThemeManager` centrally maps identifiers, exposes themes, loads the saved
+selection through `SettingsStore`, and falls back to Plain for invalid or
 unimplemented themes. Plain is the only available theme in this phase; NERV,
-Ghost HUD, Pip-Boy, and LCARS identities are reserved but unavailable.
+Ghost HUD, Pip-Boy, Alien Terminal, and Gundam Cockpit are enumerated but
+unavailable.
 
-The normal menu is Back, Codex, Meeting, Theme, and Device. The Theme submenu is
-manager-backed, but the final two-button selector gesture remains deferred.
+The normal menu is Back, Codex, Meeting, Theme, and Device. Theme and the A+B
+two-second chord open the same manager-backed selector.
 
 **Reason:** Establish theme ownership without virtual-heavy duplicate renderers
 or theme branches in application logic, while retaining a readable hardware
 fallback.
+
+## ADR-019 — Runtime companion input and safe reset
+
+**Decision:** In normal companion operation, short Button A toggles the primary
+screen, hold Button B opens the menu, and hold A+B for about two seconds opens
+the theme selector. The chord is consumed before individual actions and input
+is suppressed until both buttons are released. Button B moves with wrap,
+Button A confirms, and Cancel or menu-back leaves the active theme unchanged.
+
+Unfinished product themes remain visible as non-selectable `[soon]` entries.
+Factory reset is removed from the runtime chord and is reachable through the
+Device menu with confirmation. Existing reset policy retains Wi-Fi, backend,
+and theme settings.
+
+**Reason:** Make theme access predictable, disable legacy voice behavior in the
+primary product flow, and prevent accidental settings erasure.
+
+## ADR-020 — Theme visuals use real data only
+
+**Decision:** All themes render the same semantic product data and represent
+unknown values honestly. Source-inspired icons and motifs may decorate the UI
+but must not imply fake telemetry. Themes should support both vertical and
+horizontal compositions where practical.
+
+**Reason:** Preserve trust and product meaning while allowing strong visual
+identities.

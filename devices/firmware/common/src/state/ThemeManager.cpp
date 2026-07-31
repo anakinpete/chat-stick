@@ -16,7 +16,8 @@ constexpr ThemeDescriptor kThemes[] = {
     {ThemeId::Nerv, "nerv", "NERV", false},
     {ThemeId::GhostHud, "ghost", "Ghost HUD", false},
     {ThemeId::PipBoy, "pip-boy", "Pip-Boy", false},
-    {ThemeId::Lcars, "lcars", "LCARS", false},
+    {ThemeId::AlienTerminal, "alien", "Alien Terminal", false},
+    {ThemeId::GundamCockpit, "gundam", "Gundam Cockpit", false},
 };
 constexpr int kThemeCount = sizeof(kThemes) / sizeof(kThemes[0]);
 
@@ -63,6 +64,13 @@ ThemeId ThemeManager::availableThemeAt(int index) const {
     }
   }
   return ThemeId::Plain;
+}
+
+int ThemeManager::themeCount() const { return kThemeCount; }
+
+ThemeId ThemeManager::themeAt(int index) const {
+  return index >= 0 && index < kThemeCount ? kThemes[index].id
+                                           : ThemeId::Plain;
 }
 
 const char *ThemeManager::displayName(ThemeId id) const {

@@ -77,8 +77,8 @@ private:
   /// Minimum press duration before a local recording becomes a server turn.
   static constexpr unsigned long kRecordingCommitMs = 150;
 
-  /// Hold duration required to trigger a reset flow.
-  static constexpr unsigned long kResetHoldMs = 1500;
+  /// Hold duration required to open the runtime theme selector.
+  static constexpr unsigned long kThemeSelectorHoldMs = 2000;
 
   /// Rate limit for repeated capture-failure logs.
   static constexpr unsigned long kCaptureFailureLogIntervalMs = 1000;
@@ -178,8 +178,17 @@ private:
   /// Whether the screen contents need a fresh render.
   bool _screenDirty = true;
 
-  /// Timestamp when reset-hold detection started.
-  unsigned long _resetHoldStartMs = 0;
+  /// Timestamp when the normal-operation two-button theme chord started.
+  unsigned long _themeChordStartMs = 0;
+
+  /// Suppress individual actions until both chord buttons are released.
+  bool _suppressButtonsUntilRelease = false;
+
+  /// Whether Cancel should return from the selector to the companion menu.
+  bool _themeSelectorOpenedFromMenu = false;
+
+  /// Whether the active setup portal was explicitly opened from Device menu.
+  bool _manualSetupPortalActive = false;
 
   /// Timestamp of the last heartbeat-like activity update.
   unsigned long _lastHeartbeatMs = 0;
@@ -246,6 +255,15 @@ private:
 
   /// Error category to restore after the reset confirmation flow.
   ErrorCategory _resetReturnCategory = ErrorCategory::None;
+
+  /// Screen region to restore when factory reset is cancelled.
+  AppRegion _resetReturnRegion = AppRegion::Chat;
+
+  /// Menu page to restore when factory reset is cancelled from Device.
+  MenuState _resetReturnMenuState = MenuState::Device;
+
+  /// Menu selection to restore when factory reset is cancelled.
+  int _resetReturnMenuSelection = 0;
 
   /// Cached conversation history for the resume-chat menu.
   ConversationSummary _history[kMaxConversationHistory];
@@ -442,6 +460,9 @@ private:
   /// Enter the factory reset confirmation flow.
   void beginFactoryReset();
 
+  /// Request factory reset confirmation from the Device menu.
+  void requestFactoryReset();
+
   /// Human-readable label for the current error category.
   const char *errorCategoryLabel() const;
 
@@ -536,6 +557,12 @@ private:
   /// Open the menu overlay at a given menu screen.
   void openMenu(MenuState state = MenuState::Home);
 
+  /// Open the shared theme selector from companion or menu context.
+  void openThemeSelector(bool fromMenu);
+
+  /// Leave the selector without changing the active theme.
+  void cancelThemeSelector();
+
   /// Close the menu overlay and return to chat.
   void closeMenu();
 
@@ -575,8 +602,11 @@ private:
   /// Start a new blank conversation.
   void startFreshConversation();
 
-  /// Switch into WiFi provisioning mode.
-  void startCaptivePortalFlow();
+  /// Switch into WiFi provisioning mode, optionally allowing a local cancel.
+  void startCaptivePortalFlow(bool allowCancel = false);
+
+  /// Cancel a manually requested portal and reconnect saved configuration.
+  void cancelManualCaptivePortalFlow();
 
   /// Check for an available firmware update.
   void startFirmwareUpdateCheck();

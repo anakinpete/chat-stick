@@ -13,7 +13,8 @@ enum class ThemeId : uint8_t {
   Nerv,
   GhostHud,
   PipBoy,
-  Lcars,
+  AlienTerminal,
+  GundamCockpit,
 };
 
 struct ThemePalette {

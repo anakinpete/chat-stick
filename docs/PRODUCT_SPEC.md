@@ -122,9 +122,18 @@ Changing theme must not change what a button does, what data means, or which scr
 
 The device should summarize and surface priority information. It should not attempt to reproduce every feature of a calendar app, terminal, phone, or smartwatch.
 
-### Four polished themes before many themes
+### Five polished product themes before additional themes
 
-The MVP quality target is four complete themes rather than many incomplete themes.
+The finished product theme set is NERV-inspired, Ghost HUD-inspired,
+Pip-Boy-inspired, Alien / Weyland-Yutani-inspired, and Gundam
+cockpit-inspired. Plain remains an internal fallback. Product themes are
+completed and hardware-reviewed one at a time rather than presented as finished
+while only placeholders exist.
+
+Themed screens show real product data only. Source-inspired motifs and icons
+may be decorative, but they must not imply telemetry that the model does not
+provide. Unknown values remain explicit. Themes should support both vertical
+and horizontal compositions where practical without changing screen meaning.
 
 ## Explicit non-goals for the MVP
 

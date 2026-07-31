@@ -60,8 +60,8 @@ on hardware.
 
 ## Phase 4 — Theme engine and selector
 
-Status: theme contract and manager implemented; selector and visual themes
-pending.
+Status: theme contract, manager, persistence, selector, and companion input
+mapping implemented; product-theme visuals pending.
 
 1. Add `ThemeId` and `ThemeManager`.
 2. Extract palette, typography, frame, alert, icon, and progress styling.
@@ -73,18 +73,20 @@ pending.
 Exit condition: the plain renderer can switch visual themes without changing data or behavior.
 
 `ThemeId`, `ThemeStyle`, `BaseTheme`, semantic presentation helpers, and
-`ThemeManager` are implemented. Plain is the only selectable theme. The
-manager-backed menu entry is available for structural validation; the final
-hold-both-buttons selector remains deferred.
+`ThemeManager` are implemented. Plain is the only selectable implementation;
+the five product identities appear as `[soon]`. The menu and hold-A+B paths use
+the same selector. Runtime factory reset now uses the confirmed Device-menu
+route rather than the selector chord.
 
-## Phase 5 — Four polished themes
+## Phase 5 — Five polished product themes
 
 Implement and finish one at a time:
 
 1. NERV-style
 2. Ghost-style HUD
 3. Pip-Boy-style
-4. LCARS-style
+4. Alien / Weyland-Yutani-style
+5. Gundam cockpit-style
 
 For each theme:
 
@@ -122,8 +124,6 @@ Only after the MVP is stable:
 - animated transitions;
 - optional AI meeting summaries;
 - optional assistant/chat capability;
-- Alien theme;
 - Omnitool theme;
-- Gundam theme;
 - Halo theme;
 - Blade Runner theme.
