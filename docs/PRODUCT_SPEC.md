@@ -47,46 +47,66 @@ It should feel like a coherent fictional operating system while remaining readab
 
 ### Screen A — Codex / status
 
-Agreed semantic content:
+Frozen semantic content:
 
-- Codex state or activity;
-- Codex usage or progress;
-- relevant warning or success state.
+- activity state: Idle, Working, Waiting, Complete, Error, or Unavailable;
+- current task title;
+- current task progress percentage when known;
+- Codex allowance or credit remaining percentage when known;
+- allowance reset text or reset time when known;
+- last update time;
+- explicit loading, stale, unavailable, warning, success, and error states.
 
-Not yet frozen:
+Task progress and Codex allowance are separate values. Task progress describes
+the current task; allowance describes remaining Codex usage or credit. Unknown
+allowance must remain unknown rather than being represented as zero or another
+invented percentage.
 
-- the precise metric names;
-- whether usage is a percentage, quota, elapsed value, or a combination;
-- the backend endpoint and refresh interval;
-- whether status refers to a task, session, allowance, or service health.
+Still unresolved:
+
+- live sources for activity, task progress, and allowance;
+- backend endpoint and refresh interval;
+- warning thresholds and allowance-reset semantics supplied by the source.
 
 ### Screen B — Meeting / agenda
 
-Agreed semantic content:
+Frozen semantic content:
 
-- current or next meeting;
-- meeting or agenda information.
+- current meeting, otherwise the next meeting;
+- meeting state: none, upcoming, in progress, finished, or unavailable;
+- full meeting title;
+- start time;
+- time until start or time remaining when known;
+- location or call type;
+- one full agenda or summary line;
+- explicit loading, stale, offline, and unavailable handling.
 
-Not yet frozen:
+The data layer preserves complete title and agenda text. A later renderer may
+show long text with non-blocking horizontal scrolling but must not permanently
+truncate the stored model.
 
-- exact fields shown;
-- source calendar or service;
-- whether summaries are generated locally, by the backend, or by an AI provider;
+Still unresolved:
+
+- calendar/service provider;
+- source of the agenda or summary;
 - refresh interval and offline cache behavior.
 
 ### Shared header
 
-Agreed semantic content:
+Frozen semantic content:
 
 - current time;
-- current weather information.
+- compact weather condition/icon state;
+- temperature;
+- M5Stick battery percentage when known;
+- compact Wi-Fi/backend connection state.
 
-Not yet frozen:
+Still unresolved:
 
-- weather source;
-- exact weather fields;
+- weather provider;
 - location strategy;
-- whether battery or connection icons are added.
+- timezone configuration;
+- exact visual icon/text treatment, which belongs to the renderer and theme.
 
 ## Product principles
 

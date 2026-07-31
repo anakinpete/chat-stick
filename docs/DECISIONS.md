@@ -89,3 +89,24 @@
 **Decision:** Defer random theme on boot, day/night variants, full transitions, extra themes, and optional AI/chat features until after the stable MVP.
 
 **Reason:** Protect core quality and weekend-build scope.
+
+## ADR-016 — Freeze the shared MVP UI data model
+
+**Decision:** Use one theme-independent `CompanionUiModel` containing a shared
+header, Codex/status data, meeting/agenda data, and the active primary screen.
+The header contains time, weather and temperature, battery percentage, and
+compact connection state.
+
+Task progress and Codex allowance remaining are separate optional percentage
+values. Unknown allowance remains unknown until a real source is selected.
+Meeting data represents the current meeting when in progress, otherwise the
+next meeting, and preserves full title and agenda text.
+
+Optional numeric values and timestamps use an explicit known/unknown
+representation. Percentage construction rejects values outside `0..100`.
+Scrolling, layout, styling, theme selection, network access, and backend
+payload parsing remain outside the model.
+
+**Reason:** Freeze semantic meaning before the plain renderer and themes are
+built, without prematurely choosing providers or coupling application data to
+presentation details.

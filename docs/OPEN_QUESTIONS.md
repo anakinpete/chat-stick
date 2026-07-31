@@ -6,21 +6,18 @@ These items are deliberately unresolved. A coding agent must not silently choose
 
 ### Codex screen
 
-- What exact Codex state is displayed?
-- What does “usage” mean: percentage, allowance, tokens, time, task progress, or another measure?
-- What values trigger normal, warning, success, and critical states?
-- What is the source endpoint and refresh interval?
+- What live source supplies Codex allowance remaining and its reset time?
+- What backend endpoint and refresh interval supply Codex activity and task data?
+- What values trigger warning or critical presentation?
 
 ### Meeting screen
 
-- Which fields are required: title, start time, time remaining, attendees, location, agenda, summary, or another subset?
-- Is the screen focused on the current meeting, next meeting, or both?
 - Which calendar/service is the source?
-- Is a meeting summary part of the MVP or a later AI enhancement?
+- Is the short agenda/summary supplied by the calendar/backend or generated?
+- Which meeting data should be cached when the backend is unavailable?
 
 ### Weather and time
 
-- Which weather fields are shown?
 - Which weather provider is used?
 - Is location entered manually, derived from the backend, or selected in the setup portal?
 - How is timezone configured?
@@ -41,18 +38,17 @@ These items are deliberately unresolved. A coding agent must not silently choose
 
 ## UI details
 
-- Should battery level appear in the shared header?
 - Should Wi-Fi/backend state use icons, text, or both?
 - What is the target screen orientation?
-- What minimum font size and maximum text length fit the physical display?
-- How should long meeting titles or agendas truncate or scroll?
+- What minimum font size fits the physical display?
+- What speed, pause, and repeat behavior should the non-blocking text marquee use?
 
 ## Backend and deployment
 
 - Is the local backend the long-term architecture or only development infrastructure?
 - Will the final device use a local network address, a hosted endpoint, or both?
 - What authentication, if any, is required between device and backend?
-- Which data should be cached on the device when the backend is unavailable?
+- Which non-meeting data should be cached on the device when the backend is unavailable?
 
 ## Deferred feature choices
 

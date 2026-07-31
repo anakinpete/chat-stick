@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CompanionUiModel.h"
 #include <Arduino.h>
 
 /**

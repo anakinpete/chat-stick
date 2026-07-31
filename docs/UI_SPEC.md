@@ -10,7 +10,7 @@ Every primary screen uses the same semantic layers:
 
 ```text
 +--------------------------------+
-| Time                  Weather  |  Shared header
+| Time  Weather  Temp  Batt Conn |  Shared header
 +--------------------------------+
 |                                |
 |     Screen-specific content    |  Codex or Meeting
@@ -24,40 +24,67 @@ The exact pixel layout may be tuned for the M5Stick S3, but the semantic order r
 
 ## Screen 1 — Codex / status
 
-Required content categories:
+Required semantic data:
 
-- Codex status or activity;
-- usage/progress value;
-- normal, warning, success, or unavailable state.
+- activity: Idle, Working, Waiting, Complete, Error, or Unavailable;
+- current task title;
+- optional task progress percentage;
+- separate optional Codex allowance remaining percentage;
+- optional allowance reset label or time;
+- optional last-update time;
+- availability and severity states covering loading, stale, warning, success,
+  error, and unavailable.
 
 The renderer should accept semantic data rather than preformatted theme-specific strings.
+It must never substitute task progress for unknown allowance data.
 
 Conceptual call flow:
 
 ```cpp
-drawHeader(data.time, data.weather, activeTheme);
-drawCodexScreen(data.codex, data.usage, activeTheme);
+drawHeader(data.header, activeTheme);
+drawCodexScreen(data.codex, activeTheme);
 ```
 
-Exact field names and backend schema are not yet frozen.
+The semantic fields are frozen. Backend payload names and live sources are not.
 
 ## Screen 2 — Meeting / agenda
 
-Required content categories:
+Required semantic data:
 
-- current or next meeting state;
-- meeting/agenda information;
-- empty state when no meeting is available;
-- unavailable state when data cannot be refreshed.
+- current meeting when one is in progress, otherwise the next meeting;
+- state: None, Upcoming, InProgress, Finished, or Unavailable;
+- full meeting title;
+- optional start time;
+- optional seconds until start and seconds remaining;
+- location or call type;
+- one full agenda or summary line;
+- availability states covering loading, stale, offline context, unavailable,
+  and error.
 
 Conceptual call flow:
 
 ```cpp
-drawHeader(data.time, data.weather, activeTheme);
+drawHeader(data.header, activeTheme);
 drawMeetingScreen(data.meeting, activeTheme);
 ```
 
-Exact meeting fields are not yet frozen.
+The model preserves full title and agenda strings. A later renderer may present
+long strings with a non-blocking horizontal marquee; it must not truncate them
+in the data layer.
+
+## Shared semantic model
+
+The firmware model is theme-independent and contains:
+
+- shared header, Codex/status, and meeting/agenda data;
+- the active primary screen;
+- typed activity, meeting, connection, availability, severity, weather, and
+  location states;
+- explicit known/unknown wrappers for optional numeric values and timestamps;
+- validated percentage values constrained to `0..100`.
+
+It contains no colours, fonts, geometry, theme identifiers, display calls,
+network clients, or backend JSON field names.
 
 ## Required system states
 
@@ -166,10 +193,12 @@ Themes must not:
 
 ## Cross-theme consistency rules
 
-- Keep time and weather in the shared header.
+- Keep time, weather, battery, and connection state in the shared header.
 - Keep Codex and Meeting as the two main screens.
+- Keep task progress and Codex allowance as visibly distinct concepts.
 - Use the same data states and alert severity meanings.
 - Maintain comparable text size and readability.
+- Long title and agenda scrolling must be non-blocking.
 - Do not let decorative animation delay input or networking.
 - Avoid theme-specific wording unless it is purely a label style and does not change meaning.
 
