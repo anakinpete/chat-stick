@@ -24,6 +24,13 @@ public:
   /// Initialize Preferences storage and load saved networks.
   void init();
 
+  /**
+   * @brief Prefer one validated settings-store network during connection.
+   * @param ssid Network SSID.
+   * @param password Network password. This value is never logged.
+   */
+  void setPrimaryNetwork(const String &ssid, const String &password);
+
   /// Service captive-portal DNS and HTTP requests.
   void poll();
 
@@ -130,6 +137,12 @@ private:
   /// Preferences namespace handle.
   Preferences _prefs;
 
+  /// Valid saved-settings SSID to try before legacy and development networks.
+  String _primarySsid;
+
+  /// Password for the saved-settings SSID. Never log or display this value.
+  String _primaryPassword;
+
   /// DNS server used for captive portal interception.
   DNSServer _dnsServer;
 
@@ -196,11 +209,17 @@ private:
                         int32_t channel = 0, const uint8_t *bssid = nullptr);
 
   /**
-   * @brief Check whether an SSID already exists in saved networks.
-   * @param ssid SSID to search for.
-   * @return True when saved.
+   * @brief Check whether a credential was already attempted earlier.
+   * @param ssid SSID to compare.
+   * @param password Password to compare without logging.
+   * @return True when both SSID and password match a preferred credential.
    */
-  bool hasSavedNetwork(const String &ssid) const;
+  bool hasEquivalentCredential(const String &ssid,
+                               const String &password) const;
+
+  /// Whether a credential exactly matches the SettingsStore primary.
+  bool isPrimaryCredential(const String &ssid,
+                           const String &password) const;
 
   /**
    * @brief Check whether an SSID appeared in the latest scan results.

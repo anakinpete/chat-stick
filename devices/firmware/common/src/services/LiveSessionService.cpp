@@ -289,7 +289,7 @@ void LiveSessionService::init(const LiveSessionCallbacks &callbacks) {
     _prefsReady = _prefs.begin(kPrefsNamespace, false);
     if (_prefsReady) {
       const int savedIndex = _prefs.getInt(kLastServerIndexKey, 0);
-      if (savedIndex >= 0 && savedIndex < SERVER_ENDPOINT_COUNT) {
+      if (savedIndex >= 0 && savedIndex < endpointCount()) {
         _nextServerIndex = savedIndex;
         logClient("WS", "loaded preferred server index %d", _nextServerIndex);
       }
@@ -311,8 +311,8 @@ void LiveSessionService::init(const LiveSessionCallbacks &callbacks) {
  */
 void LiveSessionService::connect() {
   _activeServerIndex = _nextServerIndex;
-  const ServerEndpoint &endpoint = SERVER_ENDPOINTS[_nextServerIndex];
-  _nextServerIndex = (_nextServerIndex + 1) % SERVER_ENDPOINT_COUNT;
+  const ServerEndpoint &endpoint = endpointAt(_nextServerIndex);
+  _nextServerIndex = (_nextServerIndex + 1) % endpointCount();
 
   const String path = String(SERVER_PATH) + "?device_id=" + DEVICE_ID;
   const String chatQuery = _chatId.isEmpty() ? "" : "&chat_id=" + _chatId;
@@ -339,7 +339,7 @@ void LiveSessionService::connect() {
     _ws.setInsecure();
   }
 
-  if (endpoint.port == 443) {
+  if (strcmp(scheme, "wss") == 0) {
     _connected =
         _ws.connectSecure(host.c_str(), endpoint.port, fullPath.c_str());
   } else {
@@ -367,11 +367,54 @@ void LiveSessionService::disconnect() {
  * @param endpointIndex Index into SERVER_ENDPOINTS.
  */
 void LiveSessionService::setPreferredEndpointIndex(int endpointIndex) {
-  if (endpointIndex < 0 || endpointIndex >= SERVER_ENDPOINT_COUNT) {
+  if (endpointIndex < 0 || endpointIndex >= endpointCount()) {
     return;
   }
   _preferredEndpointSetExternally = true;
   _nextServerIndex = endpointIndex;
+}
+
+bool LiveSessionService::setPrimaryEndpoint(const String &host, int port) {
+  _primaryEndpointHost = "";
+  _primaryEndpoint = {nullptr, 0, nullptr};
+  _hasPrimaryEndpoint = false;
+
+  _primaryEndpointHost = host;
+  _primaryEndpointHost.trim();
+  if (_primaryEndpointHost.isEmpty() || port < 1 || port > 65535) {
+    _primaryEndpointHost = "";
+    return false;
+  }
+
+  _primaryEndpoint.host = _primaryEndpointHost.c_str();
+  _primaryEndpoint.port = port;
+  _primaryEndpoint.ca_cert = nullptr;
+
+  const String rawHost = _primaryEndpointHost;
+  const bool requestsTls = port == 443 || rawHost.startsWith("https://") ||
+                           rawHost.startsWith("wss://");
+  if (requestsTls) {
+    for (int i = 0; i < SERVER_ENDPOINT_COUNT; i++) {
+      const ServerEndpoint &compiledEndpoint = SERVER_ENDPOINTS[i];
+      if (compiledEndpoint.ca_cert && compiledEndpoint.port == port &&
+          strcmp(wsSchemeForEndpoint(compiledEndpoint), "wss") == 0 &&
+          endpointHostForConnection(compiledEndpoint) ==
+              endpointHostForConnection(_primaryEndpoint)) {
+        _primaryEndpoint.ca_cert = compiledEndpoint.ca_cert;
+        break;
+      }
+    }
+    if (!_primaryEndpoint.ca_cert) {
+      _primaryEndpointHost = "";
+      _primaryEndpoint = {nullptr, 0, nullptr};
+      return false;
+    }
+  }
+
+  _hasPrimaryEndpoint = true;
+  _preferredEndpointSetExternally = true;
+  _nextServerIndex = 0;
+  return true;
 }
 
 /**
@@ -406,11 +449,16 @@ void LiveSessionService::reconnectIfNeeded(bool enabled) {
  * @return "dev" for the local worker, "prod" otherwise, or "no server".
  */
 String LiveSessionService::activeEndpointLabel() const {
-  if (_activeServerIndex < 0 || _activeServerIndex >= SERVER_ENDPOINT_COUNT) {
+  if (_activeServerIndex < 0 || _activeServerIndex >= endpointCount()) {
     return "no server";
   }
+  if (_hasPrimaryEndpoint && _activeServerIndex == 0) {
+    return "saved";
+  }
   // Index 0 is the local dev worker; anything else is treated as prod.
-  return _activeServerIndex == 0 ? "dev" : "prod";
+  const int compiledIndex =
+      _hasPrimaryEndpoint ? _activeServerIndex - 1 : _activeServerIndex;
+  return compiledIndex == 0 ? "dev" : "prod";
 }
 
 /**
@@ -1094,9 +1142,10 @@ bool LiveSessionService::performEndpointGet(const ServerEndpoint &endpoint,
 bool LiveSessionService::getFromConfiguredEndpoints(
     const char *logAction, const EndpointUrlBuilder &buildUrl,
     const HttpGetHandler &handleResponse) {
-  for (int offset = 0; offset < SERVER_ENDPOINT_COUNT; offset++) {
-    const int index = (_nextServerIndex + offset) % SERVER_ENDPOINT_COUNT;
-    const ServerEndpoint &endpoint = SERVER_ENDPOINTS[index];
+  const int count = endpointCount();
+  for (int offset = 0; offset < count; offset++) {
+    const int index = (_nextServerIndex + offset) % count;
+    const ServerEndpoint &endpoint = endpointAt(index);
     const String url = buildUrl(endpoint);
 
     logClient("HTTP", "%s %s", logAction, url.c_str());
@@ -1126,7 +1175,7 @@ bool LiveSessionService::getFromConfiguredEndpoints(
  * @param endpointIndex Index into SERVER_ENDPOINTS.
  */
 void LiveSessionService::rememberSuccessfulEndpoint(int endpointIndex) {
-  if (endpointIndex < 0 || endpointIndex >= SERVER_ENDPOINT_COUNT) {
+  if (endpointIndex < 0 || endpointIndex >= endpointCount()) {
     return;
   }
 
@@ -1138,6 +1187,21 @@ void LiveSessionService::rememberSuccessfulEndpoint(int endpointIndex) {
     _prefs.putInt(kLastServerIndexKey, endpointIndex);
     logClient("WS", "saved preferred server index %d", endpointIndex);
   }
+}
+
+int LiveSessionService::endpointCount() const {
+  return SERVER_ENDPOINT_COUNT + (_hasPrimaryEndpoint ? 1 : 0);
+}
+
+const ServerEndpoint &
+LiveSessionService::endpointAt(int endpointIndex) const {
+  if (_hasPrimaryEndpoint) {
+    if (endpointIndex == 0) {
+      return _primaryEndpoint;
+    }
+    endpointIndex--;
+  }
+  return SERVER_ENDPOINTS[endpointIndex];
 }
 
 void LiveSessionService::logClient(const char *topic, const char *fmt,

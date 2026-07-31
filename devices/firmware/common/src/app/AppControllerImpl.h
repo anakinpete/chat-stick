@@ -72,6 +72,7 @@ void AppController::setup() {
   configureCallbacks();
 
   _wifi.init();
+  _settings.applySavedWifi(_wifi);
 
   if (Board::capabilities().externalSpeakerGain) {
     _audio.setExternalSpeakerGain(_settings.externalSpeakerGain());
@@ -93,6 +94,14 @@ void AppController::setup() {
   _chatId = "";
   _live.setChatId("");
   _live.setVoice(_settings.voice());
+  if (_settings.hasSavedBackend()) {
+    if (!_live.setPrimaryEndpoint(_settings.backendHost(),
+                                  _settings.backendPort())) {
+      Log::client("Settings",
+                  "Saved TLS backend is not trusted; using configured "
+                  "endpoints");
+    }
+  }
   if (Board::capabilities().endpointPreference) {
     _live.setPreferredEndpointIndex(_settings.serverEndpointIndex());
   }
@@ -1978,7 +1987,7 @@ String AppController::deviceStatusJson() const {
 void AppController::beginFactoryReset() {
   Log::client("Reset", "clearing device preferences");
   _live.disconnect();
-  _wifi.reset();
+  _wifi.disconnect();
   _settings.reset();
   delay(100);
   ESP.restart();

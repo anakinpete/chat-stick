@@ -16,6 +16,13 @@ void WiFiService::init() {
   }
 }
 
+void WiFiService::setPrimaryNetwork(const String &ssid,
+                                    const String &password) {
+  _primarySsid = ssid;
+  _primarySsid.trim();
+  _primaryPassword = _primarySsid.isEmpty() ? String("") : password;
+}
+
 void WiFiService::poll() {
   if (!_captivePortalActive) {
     return;
@@ -36,6 +43,15 @@ bool WiFiService::connectKnownNetworks() {
   }
   const unsigned long startMs = millis();
 
+  if (!_primarySsid.isEmpty()) {
+    if (connectToNetwork(_primarySsid, _primaryPassword, "Settings",
+                         kPrimaryConnectTimeoutMs)) {
+      rememberNetwork(_primarySsid, _primaryPassword, "Settings");
+      log("Connected in %lums", millis() - startMs);
+      return true;
+    }
+  }
+
   if (!WIFI_SCAN_BEFORE_FALLBACK_CONNECT) {
     for (int i = 0; i < _savedNetworkCount; i++) {
       const SavedNetwork &network = _savedNetworks[i];
@@ -47,6 +63,10 @@ bool WiFiService::connectKnownNetworks() {
     }
 
     for (int i = 0; i < WIFI_NETWORK_COUNT; i++) {
+      if (hasEquivalentCredential(WIFI_NETWORKS[i].ssid,
+                                  WIFI_NETWORKS[i].password)) {
+        continue;
+      }
       if (connectToNetwork(WIFI_NETWORKS[i].ssid, WIFI_NETWORKS[i].password,
                            WIFI_NETWORKS[i].label,
                            WIFI_CONNECT_TIMEOUT_SEC * 1000UL)) {
@@ -66,26 +86,32 @@ bool WiFiService::connectKnownNetworks() {
     const SavedNetwork network = _savedNetworks[0];
     const bool hasFastHints =
         WIFI_USE_FAST_CONNECT_HINTS && network.hasBssid && network.channel > 0;
-    log("Primary saved network %s fast_hints=%d channel=%ld",
-        network.ssid.c_str(), hasFastHints ? 1 : 0,
-        static_cast<long>(network.channel));
-    const unsigned long timeoutMs =
-        hasFastHints ? kPrimaryHintConnectTimeoutMs : kPrimaryConnectTimeoutMs;
-    if (connectToNetwork(network.ssid, network.password, network.label,
-                         timeoutMs, hasFastHints ? network.channel : 0,
-                         hasFastHints ? network.bssid : nullptr)) {
-      rememberNetwork(network.ssid, network.password, network.label);
-      log("Connected in %lums", millis() - startMs);
-      return true;
+    if (!isPrimaryCredential(network.ssid, network.password)) {
+      log("Primary saved network %s fast_hints=%d channel=%ld",
+          network.ssid.c_str(), hasFastHints ? 1 : 0,
+          static_cast<long>(network.channel));
+      const unsigned long timeoutMs =
+          hasFastHints ? kPrimaryHintConnectTimeoutMs
+                       : kPrimaryConnectTimeoutMs;
+      if (connectToNetwork(network.ssid, network.password, network.label,
+                           timeoutMs, hasFastHints ? network.channel : 0,
+                           hasFastHints ? network.bssid : nullptr)) {
+        rememberNetwork(network.ssid, network.password, network.label);
+        log("Connected in %lums", millis() - startMs);
+        return true;
+      }
+      retryPrimaryBySsid = hasFastHints;
     }
-    retryPrimaryBySsid = hasFastHints;
   } else if (WIFI_NETWORK_COUNT > 0) {
-    if (connectToNetwork(WIFI_NETWORKS[0].ssid, WIFI_NETWORKS[0].password,
-                         WIFI_NETWORKS[0].label, kPrimaryConnectTimeoutMs)) {
-      rememberNetwork(WIFI_NETWORKS[0].ssid, WIFI_NETWORKS[0].password,
-                      WIFI_NETWORKS[0].label);
-      log("Connected in %lums", millis() - startMs);
-      return true;
+    if (!hasEquivalentCredential(WIFI_NETWORKS[0].ssid,
+                                 WIFI_NETWORKS[0].password)) {
+      if (connectToNetwork(WIFI_NETWORKS[0].ssid, WIFI_NETWORKS[0].password,
+                           WIFI_NETWORKS[0].label, kPrimaryConnectTimeoutMs)) {
+        rememberNetwork(WIFI_NETWORKS[0].ssid, WIFI_NETWORKS[0].password,
+                        WIFI_NETWORKS[0].label);
+        log("Connected in %lums", millis() - startMs);
+        return true;
+      }
     }
     skipFirstConfiguredNetwork = true;
   }
@@ -106,6 +132,9 @@ bool WiFiService::connectKnownNetworks() {
       }
 
       const SavedNetwork network = _savedNetworks[i];
+      if (isPrimaryCredential(network.ssid, network.password)) {
+        continue;
+      }
       const bool visible = !hasScanResults || isScannedSsid(network.ssid);
       if (hasScanResults && visible != visiblePass) {
         continue;
@@ -127,7 +156,8 @@ bool WiFiService::connectKnownNetworks() {
       }
 
       if (WIFI_SKIP_SAVED_CONFIGURED_DUPLICATES &&
-          hasSavedNetwork(WIFI_NETWORKS[i].ssid)) {
+          hasEquivalentCredential(WIFI_NETWORKS[i].ssid,
+                                  WIFI_NETWORKS[i].password)) {
         continue;
       }
 
@@ -315,7 +345,10 @@ void WiFiService::rememberNetwork(const String &ssid, const String &password,
     }
   }
 
-  SavedNetwork network{ssid, password, label};
+  SavedNetwork network;
+  network.ssid = ssid;
+  network.password = password;
+  network.label = label;
   if (network.label.isEmpty()) {
     network.label = "Saved";
   }
@@ -409,13 +442,24 @@ bool WiFiService::connectToNetwork(const String &ssid, const String &password,
   return false;
 }
 
-bool WiFiService::hasSavedNetwork(const String &ssid) const {
+bool WiFiService::hasEquivalentCredential(const String &ssid,
+                                          const String &password) const {
+  if (isPrimaryCredential(ssid, password)) {
+    return true;
+  }
   for (int i = 0; i < _savedNetworkCount; i++) {
-    if (_savedNetworks[i].ssid == ssid) {
+    if (_savedNetworks[i].ssid == ssid &&
+        _savedNetworks[i].password == password) {
       return true;
     }
   }
   return false;
+}
+
+bool WiFiService::isPrimaryCredential(const String &ssid,
+                                      const String &password) const {
+  return !_primarySsid.isEmpty() && _primarySsid == ssid &&
+         _primaryPassword == password;
 }
 
 bool WiFiService::isScannedSsid(const String &ssid) const {

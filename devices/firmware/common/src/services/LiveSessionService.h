@@ -186,6 +186,14 @@ public:
    */
   void setPreferredEndpointIndex(int endpointIndex);
 
+  /**
+   * @brief Prefer a validated persisted backend before compiled endpoints.
+   * @param host Backend hostname or address.
+   * @param port TCP port in the range 1..65535.
+   * @return True when the endpoint is safe to use.
+   */
+  bool setPrimaryEndpoint(const String &host, int port);
+
   /// Current selected voice identifier.
   const String &voice() const { return _voice; }
 
@@ -299,6 +307,15 @@ private:
   /// Current selected voice identifier.
   String _voice;
 
+  /// Storage backing the primary endpoint host pointer.
+  String _primaryEndpointHost;
+
+  /// Persisted backend endpoint tried before compile-time fallbacks.
+  ServerEndpoint _primaryEndpoint{nullptr, 0, nullptr};
+
+  /// Whether a valid persisted backend endpoint is configured.
+  bool _hasPrimaryEndpoint = false;
+
   /// Whether the WebSocket is currently connected.
   bool _connected = false;
 
@@ -325,6 +342,12 @@ private:
 
   /// Preferences key for the last successful server endpoint.
   static constexpr const char *kLastServerIndexKey = "server";
+
+  /// Number of runtime endpoints including an optional persisted primary.
+  int endpointCount() const;
+
+  /// Resolve a runtime endpoint index.
+  const ServerEndpoint &endpointAt(int endpointIndex) const;
 
   /// Handle an incoming WebSocket message.
   void handleMessage(websockets::WebsocketsMessage msg);

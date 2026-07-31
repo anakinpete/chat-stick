@@ -3,6 +3,8 @@
 #include <Arduino.h>
 #include <Preferences.h>
 
+class WiFiService;
+
 /**
  * @brief Persistent user and device settings stored in Preferences.
  */
@@ -31,6 +33,31 @@ public:
 
   /// Preferred server endpoint index.
   int serverEndpointIndex() const { return _serverEndpointIndex; }
+
+  /// Effective WiFi SSID, including the development fallback when needed.
+  const String &wifiSsid() const { return _wifiSsid; }
+
+  /// Effective backend host, including the development fallback when needed.
+  const String &backendHost() const { return _backendHost; }
+
+  /// Effective backend port, including the development fallback when needed.
+  int backendPort() const { return _backendPort; }
+
+  /// Validated active visual theme identifier.
+  const String &activeTheme() const { return _activeTheme; }
+
+  /// Whether valid persisted WiFi credentials replaced the fallback.
+  bool hasSavedWifi() const { return _hasSavedWifi; }
+
+  /**
+   * @brief Transfer saved credentials directly to the WiFi startup service.
+   * @param wifi WiFi service that receives the preferred network.
+   * @return True when saved credentials were applied.
+   */
+  bool applySavedWifi(WiFiService &wifi) const;
+
+  /// Whether a valid persisted backend endpoint replaced the fallback.
+  bool hasSavedBackend() const { return _hasSavedBackend; }
 
   /// Whether an OTA update should be installed on next boot.
   bool pendingFirmwareUpdate() const { return _pendingFirmwareUpdate; }
@@ -89,6 +116,32 @@ public:
   void setServerEndpointIndex(int endpointIndex);
 
   /**
+   * @brief Validate and persist WiFi credentials.
+   * @param ssid Non-empty network SSID.
+   * @param password Network password, which may be empty for an open network.
+   * @return True when the settings were valid and persisted.
+   */
+  bool saveWifiCredentials(const String &ssid, const String &password);
+
+  /**
+   * @brief Validate and persist the backend endpoint.
+   * @param host Non-empty hostname or address.
+   * @param port TCP port in the range 1..65535.
+   * @return True when the settings were valid and persisted.
+   */
+  bool saveBackend(const String &host, int port);
+
+  /**
+   * @brief Validate and persist the active theme identifier.
+   * @param themeId One of the supported theme identifiers.
+   * @return True when the identifier was valid and persisted.
+   */
+  bool saveActiveTheme(const String &themeId);
+
+  /// Whether a theme identifier is supported by this firmware.
+  static bool isValidTheme(const String &themeId);
+
+  /**
    * @brief Record a deferred firmware update for installation on next boot.
    * @param version Firmware version to install.
    * @param downloadUrl OTA binary download URL.
@@ -98,7 +151,7 @@ public:
   /// Clear any deferred firmware update state.
   void clearPendingFirmwareUpdate();
 
-  /// Reset all settings to defaults and clear persisted values.
+  /// Reset device state while retaining connectivity and theme settings.
   void reset();
 
   /// Default external speaker gain.
@@ -138,6 +191,27 @@ private:
   /// Cached preferred server endpoint index.
   int _serverEndpointIndex = 0;
 
+  /// Effective WiFi SSID.
+  String _wifiSsid;
+
+  /// Effective WiFi password. Never log or display this value.
+  String _wifiPassword;
+
+  /// Effective backend hostname or address.
+  String _backendHost;
+
+  /// Effective backend TCP port.
+  int _backendPort = 0;
+
+  /// Validated active theme identifier.
+  String _activeTheme;
+
+  /// Whether valid persisted WiFi credentials are active.
+  bool _hasSavedWifi = false;
+
+  /// Whether a valid persisted backend endpoint is active.
+  bool _hasSavedBackend = false;
+
   /// Cached deferred firmware update flag.
   bool _pendingFirmwareUpdate = false;
 
@@ -173,6 +247,24 @@ private:
 
   /// Preferences key for preferred server endpoint index.
   static constexpr const char *kServerEndpointKey = "server_idx";
+
+  /// Preferences key for the WiFi SSID.
+  static constexpr const char *kWifiSsidKey = "wifi_ssid";
+
+  /// Preferences key for the WiFi password.
+  static constexpr const char *kWifiPasswordKey = "wifi_pass";
+
+  /// Preferences key for the backend hostname or address.
+  static constexpr const char *kBackendHostKey = "backend_host";
+
+  /// Preferences key for the backend TCP port.
+  static constexpr const char *kBackendPortKey = "backend_port";
+
+  /// Preferences key for the active visual theme.
+  static constexpr const char *kActiveThemeKey = "theme";
+
+  /// Safe visual theme used when no valid selection exists.
+  static constexpr const char *kDefaultTheme = "nerv";
 
   /// Preferences key for deferred firmware update flag.
   static constexpr const char *kFirmwarePendingKey = "fw_pending";
