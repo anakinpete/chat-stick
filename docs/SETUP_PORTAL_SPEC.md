@@ -96,7 +96,7 @@ An AP password and stronger protection may be added later. The MVP portal is a l
 
 ## Configuration storage
 
-The portal must use the same settings abstraction as normal startup. Avoid one code path reading `credentials.h` while another reads Preferences indefinitely.
+The portal and normal startup use the same settings abstraction. Firmware WiFi startup must not depend on compiled credentials.
 
 Development-time fallback constants may remain temporarily, but normal user configuration should prefer saved settings.
 

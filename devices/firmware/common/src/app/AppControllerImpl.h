@@ -42,6 +42,7 @@ void AppController::setup() {
   Serial.flush();
 
   Board::init();
+  _powerManager.begin();
   setCpuFrequencyMhz(CPU_ACTIVE_MHZ);
   Log::client("Setup", "CPU clock set to %lu MHz", getCpuFrequencyMhz());
 
@@ -55,14 +56,6 @@ void AppController::setup() {
     Log::client("Boot", "wake from deep sleep cause=%s",
                 deepSleepWakeReasonName(wakeReason));
   }
-  if (shouldPowerOffAfterIdleDeepSleep(wakeReason)) {
-    Log::client("Power", "idle deep sleep window elapsed; powering off");
-    shutdownHardware();
-    while (true) {
-      delay(1000);
-    }
-  }
-
   _display.init();
   _display.setBrightness(_settings.brightness());
   _displayReady = true;
@@ -119,7 +112,6 @@ void AppController::setup() {
       Log::client(topic, "%s", message);
     }
   };
-  callbacks.onActivity = [this]() { _powerManager.registerActivity(); };
   callbacks.onStatus = [this](const String &status) {
     if (_appState != AppState::Error) {
       setAppState(AppState::Connecting, status);
@@ -426,7 +418,7 @@ void AppController::configureCallbacks() {
   _powerManager.onWiFiStateChange(
       [this](bool enabled) { setNetworkEnabled(enabled); });
 
-  _powerManager.onPowerOff([this]() { performPowerOff(true); });
+  _powerManager.onPowerOff([this]() { shutdownHardware(); });
 }
 
 void AppController::connectNetworkStack() {
@@ -531,8 +523,8 @@ void AppController::retryAfterError() {
   }
 }
 
-void AppController::performPowerOff(bool allowIdleDeepSleep) {
-  if (enterDeepSleepForTimerOrIdle(allowIdleDeepSleep)) {
+void AppController::performPowerOff() {
+  if (enterDeepSleepForNextTimer()) {
     return;
   }
   shutdownHardware();
@@ -547,54 +539,35 @@ void AppController::shutdownHardware() {
   Board::powerOff();
 }
 
-bool AppController::shouldPowerOffAfterIdleDeepSleep(
-    DeepSleepWakeReason wakeReason) const {
-  return IDLE_DEEP_SLEEP_ENABLED && wakeReason == DeepSleepWakeReason::Timer &&
-         _timers.count() == 0;
-}
-
-bool AppController::enterDeepSleepForTimerOrIdle(
-    bool includeIdleShutdownDeadline) {
-  if (!IDLE_DEEP_SLEEP_ENABLED) {
+bool AppController::enterDeepSleepForNextTimer() {
+  if (_timers.count() == 0) {
     return false;
   }
 
   uint64_t sleepUs = 0;
-  const char *reason = nullptr;
-
-  if (_timers.count() == 0) {
-    if (!includeIdleShutdownDeadline) {
-      return false;
-    }
-    sleepUs =
-        static_cast<uint64_t>(IDLE_DEEP_SLEEP_SHUTDOWN_SEC) * 1000000ULL;
-    reason = "idle shutdown window";
-  } else {
-    const time_t now = time(nullptr);
-    const time_t deadline = _timers.nextDeadline();
-    if (now < TIMER_MIN_VALID_EPOCH || deadline == 0) {
-      return false;
-    }
-
-    if (deadline <= now) {
-      checkTimerExpiry();
-      if (_appState == AppState::Alarm) {
-        _powerManager.restoreActive();
-        return true;
-      }
-      return false;
-    }
-
-    sleepUs = static_cast<uint64_t>(deadline - now) * 1000000ULL;
-    reason = "next timer";
+  const time_t now = time(nullptr);
+  const time_t deadline = _timers.nextDeadline();
+  if (now < TIMER_MIN_VALID_EPOCH || deadline == 0) {
+    return false;
   }
+
+  if (deadline <= now) {
+    checkTimerExpiry();
+    if (_appState == AppState::Alarm) {
+      _powerManager.restoreActive();
+      return true;
+    }
+    return false;
+  }
+
+  sleepUs = static_cast<uint64_t>(deadline - now) * 1000000ULL;
 
   if (sleepUs == 0) {
     return false;
   }
 
   Log::client("Power", "deep sleep %llu us until %s",
-              static_cast<unsigned long long>(sleepUs), reason);
+              static_cast<unsigned long long>(sleepUs), "next timer");
 
   _live.disconnect();
   _wifi.disconnect();
@@ -1873,9 +1846,53 @@ void AppController::processMenuFetches() {
 }
 
 void AppController::processPower() {
-  if (_appRegion != AppRegion::Menu && _appState == AppState::Ready &&
-      (_timers.count() == 0 || IDLE_DEEP_SLEEP_ENABLED)) {
-    _powerManager.update();
+  const CodexActivityState currentActivity = effectiveCodexActivityState();
+  if (isMeaningfulStateTransition(
+          _powerActivityStateKnown,
+          static_cast<uint8_t>(_powerActivityState),
+          static_cast<uint8_t>(currentActivity))) {
+    _powerManager.noteMeaningfulActivity();
+    _screenDirty = true;
+  }
+  _powerActivityState = currentActivity;
+  _powerActivityStateKnown = true;
+
+  const bool inactivityEnabled =
+      _appRegion != AppRegion::Menu && _appState == AppState::Ready;
+  const PowerState before = _powerManager.getState();
+  _powerManager.update(inactivityEnabled);
+  if (_powerManager.getState() != before) {
+    _screenDirty = true;
+  }
+}
+
+CodexActivityState AppController::effectiveCodexActivityState() const {
+  if (!_wifi.isConnected()) {
+    return CodexActivityState::Offline;
+  }
+  if (!_hasCodexActivity) {
+    return CodexActivityState::Unavailable;
+  }
+  if (_activityTransportStale) {
+    return CodexActivityState::Stale;
+  }
+
+  switch (_codexActivityInfo.state) {
+  case CodexActivityInfo::State::Idle:
+    return CodexActivityState::Idle;
+  case CodexActivityInfo::State::Running:
+    return CodexActivityState::Working;
+  case CodexActivityInfo::State::Done:
+    return CodexActivityState::Done;
+  case CodexActivityInfo::State::Cancelled:
+    return CodexActivityState::Cancelled;
+  case CodexActivityInfo::State::Stale:
+    return CodexActivityState::Stale;
+  case CodexActivityInfo::State::Offline:
+    return CodexActivityState::Offline;
+  case CodexActivityInfo::State::Unavailable:
+  default:
+    return CodexActivityState::Unavailable;
   }
 }
 
@@ -2058,40 +2075,12 @@ const CompanionUiModel &AppController::buildCompanionUi() {
   signals.backendConnected = _live.isConnected();
   signals.backendConnecting =
       _networkStackStarted && signals.wifiConnected && !signals.backendConnected;
+  signals.activity = effectiveCodexActivityState();
   if (!signals.wifiConnected) {
-    signals.activity = CodexActivityState::Offline;
     signals.activityAvailability = DataAvailability::Unavailable;
   } else if (!_hasCodexActivity) {
-    signals.activity = CodexActivityState::Unavailable;
     signals.activityAvailability = DataAvailability::Unavailable;
   } else {
-    switch (_codexActivityInfo.state) {
-    case CodexActivityInfo::State::Idle:
-      signals.activity = CodexActivityState::Idle;
-      break;
-    case CodexActivityInfo::State::Running:
-      signals.activity = CodexActivityState::Working;
-      break;
-    case CodexActivityInfo::State::Done:
-      signals.activity = CodexActivityState::Done;
-      break;
-    case CodexActivityInfo::State::Cancelled:
-      signals.activity = CodexActivityState::Cancelled;
-      break;
-    case CodexActivityInfo::State::Stale:
-      signals.activity = CodexActivityState::Stale;
-      break;
-    case CodexActivityInfo::State::Offline:
-      signals.activity = CodexActivityState::Offline;
-      break;
-    case CodexActivityInfo::State::Unavailable:
-    default:
-      signals.activity = CodexActivityState::Unavailable;
-      break;
-    }
-    if (_activityTransportStale) {
-      signals.activity = CodexActivityState::Stale;
-    }
     signals.activityAvailability =
         signals.activity == CodexActivityState::Unavailable ||
                 signals.activity == CodexActivityState::Offline

@@ -216,15 +216,6 @@ private:
                         const String &label, unsigned long timeoutMs,
                         int32_t channel = 0, const uint8_t *bssid = nullptr);
 
-  /**
-   * @brief Check whether a credential was already attempted earlier.
-   * @param ssid SSID to compare.
-   * @param password Password to compare without logging.
-   * @return True when both SSID and password match a preferred credential.
-   */
-  bool hasEquivalentCredential(const String &ssid,
-                               const String &password) const;
-
   /// Whether a credential exactly matches the SettingsStore primary.
   bool isPrimaryCredential(const String &ssid,
                            const String &password) const;

@@ -2,6 +2,7 @@
 
 #include "Config.h"
 #include "hal/BoardPower.h"
+#include "power/PowerPolicy.h"
 #include <stdarg.h>
 
 const char *powerStateName(PowerState state) {
@@ -24,36 +25,85 @@ const char *powerStateName(PowerState state) {
 }
 
 PowerManager::PowerManager()
-    : _state(PowerState::Active), _lastActivityMs(millis()),
+    : _state(PowerState::Active), _lastActivityMs(0),
       _savedBrightness(DEFAULT_BRIGHTNESS),
       _timeouts({IDLE_DIM_MS, IDLE_SCREEN_OFF_MS, IDLE_LIGHT_SLEEP_MS,
                  IDLE_POWER_OFF_MS}) {}
 
-void PowerManager::update() {
-  if (_state == PowerState::Waking || _state == PowerState::PowerOff) {
+void PowerManager::begin() {
+  const unsigned long now = millis();
+  _state = PowerState::Active;
+  _bootStartedMs = now;
+  _lastActivityMs = now;
+  _begun = true;
+  _externalPowerConnected = true;
+  _powerSourceKnown = false;
+  _powerSourceCandidate = true;
+  _powerSourceCandidateSamples = 0;
+  _lastPowerSourcePollMs = now;
+  _powerSourcePollStarted = false;
+}
+
+void PowerManager::update(bool inactivityEnabled) {
+  if (!_begun) {
+    begin();
     return;
   }
 
-  const unsigned long idle = getIdleTime();
+  const unsigned long now = millis();
+  updatePowerSource(now);
 
-  PowerState target = PowerState::Active;
-  if (idle >= _timeouts.powerOffMs && canIdlePowerOff()) {
-    target = PowerState::PowerOff;
-  } else if (Board::capabilities().lightSleep &&
-             idle >= _timeouts.lightSleepMs) {
-    target = PowerState::LightSleep;
-  } else if (idle >= _timeouts.screenOffMs) {
-    target = PowerState::ScreenOff;
-  } else if (idle >= _timeouts.dimMs) {
-    target = PowerState::Dimmed;
+  if (_state == PowerState::Waking || _state == PowerState::PowerOff ||
+      !_powerSourceKnown) {
+    return;
+  }
+  if (!inactivityEnabled) {
+    return;
   }
 
-  if (target > _state) {
+  const PowerSourcePolicy source =
+      !_powerSourceKnown
+          ? PowerSourcePolicy::Unknown
+          : _externalPowerConnected ? PowerSourcePolicy::External
+                                    : PowerSourcePolicy::Battery;
+  const IdlePolicyTarget policy = selectSafeIdlePolicyTarget(
+      source, elapsedPolicyMs(now, _bootStartedMs),
+      elapsedPolicyMs(now, _lastActivityMs), _timeouts.dimMs,
+      _timeouts.screenOffMs, _timeouts.powerOffMs,
+      BOOT_POWER_OFF_GUARD_MS);
+  PowerState target = PowerState::Active;
+  switch (policy) {
+  case IdlePolicyTarget::Dimmed:
+    target = PowerState::Dimmed;
+    break;
+  case IdlePolicyTarget::ScreenOff:
+    target = PowerState::ScreenOff;
+    break;
+  case IdlePolicyTarget::PowerOff:
+    target = PowerState::PowerOff;
+    break;
+  case IdlePolicyTarget::Active:
+  default:
+    target = PowerState::Active;
+    break;
+  }
+
+  if (target == PowerState::Active && _state != PowerState::Active) {
+    restoreActive();
+  } else if (target > _state) {
     transitionTo(target);
   }
 }
 
 void PowerManager::registerActivity() {
+  noteMeaningfulActivity();
+}
+
+void PowerManager::noteMeaningfulActivity() {
+  if (!_begun) {
+    begin();
+    return;
+  }
   _lastActivityMs = millis();
 
   if (isInterruptible()) {
@@ -62,14 +112,16 @@ void PowerManager::registerActivity() {
 }
 
 void PowerManager::setTimeouts(const PowerTimeouts &timeouts) {
-  _timeouts.dimMs = max(1000UL, timeouts.dimMs);
-  _timeouts.screenOffMs = max(_timeouts.dimMs + 1000UL, timeouts.screenOffMs);
-  _timeouts.lightSleepMs =
-      max(_timeouts.screenOffMs + 1000UL, timeouts.lightSleepMs);
-  const unsigned long powerOffFloor =
-      Board::capabilities().lightSleep ? _timeouts.lightSleepMs
-                                       : _timeouts.screenOffMs;
-  _timeouts.powerOffMs = max(powerOffFloor + 1000UL, timeouts.powerOffMs);
+  const NormalizedPolicyTimeouts normalized = normalizePolicyTimeouts(
+      timeouts.dimMs, timeouts.screenOffMs, timeouts.powerOffMs,
+      IDLE_DIM_MS, IDLE_SCREEN_OFF_MS, IDLE_POWER_OFF_MS);
+  _timeouts.dimMs = normalized.dimMs;
+  _timeouts.screenOffMs = normalized.screenOffMs;
+  _timeouts.powerOffMs = normalized.powerOffMs;
+  // The field remains in the runtime contract, but normal inactivity has no
+  // sleep stage. Align it with final power-off so it cannot imply an earlier
+  // transition or break the ordered timeout report.
+  _timeouts.lightSleepMs = _timeouts.powerOffMs;
   logServer("updated timeouts dim=%lu screen=%lu sleep=%lu off=%lu",
             _timeouts.dimMs, _timeouts.screenOffMs, _timeouts.lightSleepMs,
             _timeouts.powerOffMs);
@@ -122,14 +174,48 @@ unsigned long PowerManager::getIdleTime() const {
   return millis() - _lastActivityMs;
 }
 
-bool PowerManager::canIdlePowerOff() const {
-  if (IDLE_POWER_OFF_WHILE_USB_CONNECTED) {
-    return true;
-  }
+void PowerManager::updatePowerSource(unsigned long now) {
   if (!Board::capabilities().usbPowerStatus) {
-    return true;
+    if (!_powerSourceKnown || !_externalPowerConnected) {
+      _powerSourceKnown = true;
+      _externalPowerConnected = true;
+      noteMeaningfulActivity();
+      logClient("external power status unavailable; using always-on policy");
+    }
+    return;
   }
-  return !Board::usbConnected();
+
+  if (_powerSourcePollStarted &&
+      now - _lastPowerSourcePollMs < POWER_SOURCE_POLL_MS) {
+    return;
+  }
+  _powerSourcePollStarted = true;
+  _lastPowerSourcePollMs = now;
+
+  const bool sample = Board::usbConnected();
+  if (_powerSourceCandidateSamples == 0 || sample != _powerSourceCandidate) {
+    _powerSourceCandidate = sample;
+    _powerSourceCandidateSamples = 1;
+    return;
+  }
+  if (!isPowerSourceDebounced(_powerSourceCandidateSamples,
+                              POWER_SOURCE_CONFIRM_SAMPLES)) {
+    ++_powerSourceCandidateSamples;
+  }
+  if (!isPowerSourceDebounced(_powerSourceCandidateSamples,
+                              POWER_SOURCE_CONFIRM_SAMPLES)) {
+    return;
+  }
+  if (_powerSourceKnown && _externalPowerConnected == sample) {
+    return;
+  }
+
+  const bool wasKnown = _powerSourceKnown;
+  _powerSourceKnown = true;
+  _externalPowerConnected = sample;
+  noteMeaningfulActivity();
+  logClient("power source %s%s", sample ? "USB" : "battery",
+            wasKnown ? " (changed)" : "");
 }
 
 void PowerManager::applyCpuFrequency(int mhz) {
@@ -222,7 +308,7 @@ void PowerManager::enterLightSleep() {
     }
 
     if (reason == LightSleepWakeReason::Timer &&
-        getIdleTime() >= _timeouts.powerOffMs && canIdlePowerOff()) {
+        getIdleTime() >= _timeouts.powerOffMs && !_externalPowerConnected) {
       transitionTo(PowerState::PowerOff);
       return;
     }

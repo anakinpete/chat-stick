@@ -3,10 +3,9 @@
 #include <Arduino.h>
 
 // ============= Server Configuration =============
-// The dev and prod server addresses are per-user and live in credentials.h
-// (gitignored). credentials.h defines: DEVELOPMENT_SERVER_ADDRESS,
-// DEVELOPMENT_SERVER_PORT, PRODUCTION_SERVER_ADDRESS, SERVER_ENDPOINTS[],
-// and SERVER_ENDPOINT_COUNT.
+// Deployment-independent endpoint types and trust anchors live here. Runtime
+// backend selection comes from SettingsStore; safe defaults live in
+// services/ServerConfig.h.
 struct ServerEndpoint {
   const char *host;
   int port;
@@ -39,9 +38,8 @@ struct WiFiNetwork {
   const char *label;
 };
 
-// WiFi credentials are in credentials.h (gitignored).
-// Copy credentials.h.example to credentials.h and fill in your networks.
-// credentials.h defines: WIFI_NETWORKS[] and WIFI_NETWORK_COUNT
+// WiFi credentials are provisioned through the setup portal and stored in
+// Preferences. No WiFi password is compiled into the firmware.
 constexpr int WIFI_CONNECT_TIMEOUT_SEC = 10;
 constexpr bool WIFI_DISABLE_PERSISTENT_STORAGE = true;
 constexpr bool WIFI_DISABLE_SLEEP_DURING_CONNECT = true;
@@ -96,15 +94,15 @@ constexpr time_t TIMER_MIN_VALID_EPOCH = 1704067200;
 // ============= Power Management =============
 constexpr int CPU_ACTIVE_MHZ = 160;
 constexpr int CPU_IDLE_MHZ = 80;
-constexpr unsigned long IDLE_DIM_MS = 60 * 1000;
-constexpr unsigned long IDLE_SCREEN_OFF_MS = 2 * 60 * 1000;
-constexpr unsigned long IDLE_POWER_OFF_MS = 5 * 60 * 1000;
+constexpr unsigned long IDLE_DIM_MS = 2 * 60 * 1000;
+constexpr unsigned long IDLE_SCREEN_OFF_MS = 5 * 60 * 1000;
+constexpr unsigned long IDLE_POWER_OFF_MS = 30 * 60 * 1000;
+constexpr unsigned long BOOT_POWER_OFF_GUARD_MS = 30 * 60 * 1000;
+// Retained in the runtime settings contract for compatibility. Normal
+// inactivity no longer enters light/deep sleep before full power-off.
 constexpr unsigned long IDLE_LIGHT_SLEEP_MS = IDLE_POWER_OFF_MS;
 constexpr unsigned long LIGHT_SLEEP_WAKE_INTERVAL_MS = 250;
-constexpr bool IDLE_POWER_OFF_WHILE_USB_CONNECTED = true;
-constexpr bool IDLE_DEEP_SLEEP_ENABLED = true;
-constexpr uint32_t IDLE_FULL_POWER_OFF_SEC = 12 * 60 * 60;
-constexpr uint32_t IDLE_DEEP_SLEEP_SHUTDOWN_SEC =
-    IDLE_FULL_POWER_OFF_SEC - (IDLE_POWER_OFF_MS / 1000);
+constexpr unsigned long POWER_SOURCE_POLL_MS = 250;
+constexpr uint8_t POWER_SOURCE_CONFIRM_SAMPLES = 3;
 constexpr int BRIGHTNESS_DIM = 48;
 constexpr int BRIGHTNESS_OFF = 0;

@@ -1,6 +1,7 @@
 #include "LiveSessionService.h"
 
-#include "credentials.h"
+#include "DeviceAuth.h"
+#include "ServerConfig.h"
 #include "hal/BoardPower.h"
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
@@ -74,7 +75,7 @@ bool parseUtcIso8601(const char *value, int64_t &unixSeconds) {
 }
 
 /**
- * @brief Whether a device-auth token is compiled into credentials.h.
+ * @brief Whether an optional local device-auth token is configured.
  */
 bool hasDeviceAuthToken() { return DEVICE_AUTH_TOKEN && DEVICE_AUTH_TOKEN[0]; }
 
@@ -368,9 +369,19 @@ void LiveSessionService::init(const LiveSessionCallbacks &callbacks) {
  * @brief Open the WebSocket to the next server endpoint in rotation.
  */
 void LiveSessionService::connect() {
+  const int count = endpointCount();
+  if (count <= 0) {
+    _connected = false;
+    logClient("WS", "no backend endpoint configured");
+    if (_callbacks.onStatus) {
+      _callbacks.onStatus("Backend not configured");
+    }
+    return;
+  }
+
   _activeServerIndex = _nextServerIndex;
   const ServerEndpoint &endpoint = endpointAt(_nextServerIndex);
-  _nextServerIndex = (_nextServerIndex + 1) % endpointCount();
+  _nextServerIndex = (_nextServerIndex + 1) % count;
 
   const String path = String(SERVER_PATH) + "?device_id=" + DEVICE_ID;
   const String chatQuery = _chatId.isEmpty() ? "" : "&chat_id=" + _chatId;

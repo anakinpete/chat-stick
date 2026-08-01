@@ -62,11 +62,17 @@ public:
   /// Construct a manager with configured default timeout values.
   PowerManager();
 
-  /// Advance idle-state transitions based on elapsed inactivity.
-  void update();
+  /// Establish a fresh post-Arduino, post-board boot inactivity baseline.
+  void begin();
 
-  /// Mark user or network activity and restore from interruptible states.
+  /// Reconcile power source and optionally advance inactivity transitions.
+  void update(bool inactivityEnabled = true);
+
+  /// Mark direct user activity and restore from interruptible states.
   void registerActivity();
+
+  /// Mark a semantic event that should reset normal battery inactivity.
+  void noteMeaningfulActivity();
 
   /**
    * @brief Replace timeout thresholds, clamping them into a valid order.
@@ -152,11 +158,35 @@ private:
   /// Timestamp of the most recent registered activity.
   unsigned long _lastActivityMs;
 
+  /// Timestamp of explicit runtime initialization for the boot safety guard.
+  unsigned long _bootStartedMs = 0;
+
+  /// Whether begin() established valid runtime timestamps.
+  bool _begun = false;
+
   /// Brightness restored when leaving dim/off states.
   int _savedBrightness;
 
   /// Current normalized idle timeout thresholds.
   PowerTimeouts _timeouts;
+
+  /// Last debounced external-power state; unknown is treated as always-on.
+  bool _externalPowerConnected = true;
+
+  /// Whether a debounced external-power state has been established.
+  bool _powerSourceKnown = false;
+
+  /// Most recent raw external-power candidate.
+  bool _powerSourceCandidate = true;
+
+  /// Number of consecutive samples matching the current candidate.
+  uint8_t _powerSourceCandidateSamples = 0;
+
+  /// Timestamp of the latest power-source sample.
+  unsigned long _lastPowerSourcePollMs = 0;
+
+  /// Whether the power-source poll cadence has started.
+  bool _powerSourcePollStarted = false;
 
   /// Callback used to apply display brightness changes.
   std::function<void(int)> _brightnessCallback;
@@ -173,8 +203,8 @@ private:
   /// Optional mirrored log sink.
   LogCallback _logCallback;
 
-  /// Whether idle power-off is allowed in the current power-source state.
-  bool canIdlePowerOff() const;
+  /// Poll and debounce the board's external-power indication.
+  void updatePowerSource(unsigned long now);
 
   /// Apply a CPU frequency change through the registered callback.
   void applyCpuFrequency(int mhz);

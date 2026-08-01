@@ -1,0 +1,6 @@
+#pragma once
+
+// Optional shared secret for authenticated device endpoints.
+// Copy to device_auth_local.h only when the backend requires device auth.
+// Never commit the local file or log this value.
+constexpr const char *DEVICE_AUTH_TOKEN = "replace-with-device-token";

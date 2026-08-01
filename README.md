@@ -81,12 +81,11 @@ wrangler d1 migrations apply DB --remote
 cd devices/firmware/m5-stick
 # or: cd devices/firmware/waveshare
 
-cp src/credentials.h.example src/credentials.h
-# Edit src/credentials.h:
-#   DEVELOPMENT_SERVER_ADDRESS: LAN IP of the machine running `wrangler dev`
-#   PRODUCTION_SERVER_ADDRESS: deployed worker hostname
-#   DEVICE_AUTH_TOKEN: only if the worker has DEVICE_AUTH_TOKEN configured
-#   WIFI_NETWORKS: known SSIDs/passwords for first boot
+# WiFi and the primary backend are configured through the device setup portal.
+# Optional authenticated deployments may copy:
+#   src/device_auth_local.h.example -> src/device_auth_local.h
+# Optional compiled TLS fallbacks may copy:
+#   src/server_config_local.h.example -> src/server_config_local.h
 
 # Update upload_port/monitor_port in platformio.ini for your serial port.
 
@@ -110,7 +109,9 @@ wrangler d1 migrations apply DB --remote
 wrangler deploy
 ```
 
-After deploying, set `PRODUCTION_SERVER_ADDRESS` in the device's `src/credentials.h`, rebuild, and flash the device.
+After deploying, configure the worker hostname through the device setup portal.
+If the saved endpoint uses TLS, add that public hostname and its matching CA to
+the optional secret-free `src/server_config_local.h` before rebuilding.
 
 ## Optional Cloudflare Bindings
 
@@ -224,7 +225,10 @@ Device-side tools include `set_brightness`, `set_volume`, `set_speaker`, `set_ex
 
 ## Releases and OTA
 
-This repository is source-only. Do not publish pre-built `.bin` firmware files publicly. `credentials.h` is compiled into the firmware, so local binaries contain WiFi SSIDs, passwords, device tokens, and server URLs in plaintext.
+This repository is source-only. Do not publish deployment-specific `.bin`
+firmware publicly: optional device-auth tokens and compiled fallback endpoints
+remain visible in a local binary. WiFi passwords are stored at runtime instead
+of being compiled into the firmware.
 
 OTA distribution is per deployment. Each user should serve their own firmware binary from their own R2 bucket through their own worker.
 
@@ -243,7 +247,7 @@ To cut a firmware release:
 2. Run `./publish-ota-release.sh m5-stick` or `./publish-ota-release.sh waveshare`.
 3. Devices on older versions install the update on next boot, or from `Device -> Check for updates`.
 
-The worker finds the latest available firmware by listing `chat-stick/firmware/<device>/firmware-v<N>.bin` in R2 and choosing the highest version. For M5StickS3, it also checks the legacy `chat-stick/firmware/firmware-v<N>.bin` path. `publish-ota-release.sh` asks the deployed worker for that latest version before building; set `OTA_CHECK_URL` to override the default URL derived from the selected device's `src/credentials.h`.
+The worker finds the latest available firmware by listing `chat-stick/firmware/<device>/firmware-v<N>.bin` in R2 and choosing the highest version. For M5StickS3, it also checks the legacy `chat-stick/firmware/firmware-v<N>.bin` path. Set `OTA_CHECK_URL` explicitly when using `publish-ota-release.sh` with the runtime-provisioned firmware configuration.
 
 ## Credentials
 
@@ -253,7 +257,8 @@ All deployment-specific files are gitignored:
 | --- | --- | --- |
 | `server/.dev.vars` | Local secrets for Wrangler dev. | `server/.dev.vars.example` |
 | `server/wrangler.toml` | Cloudflare bindings and account-specific ids. | `server/wrangler.toml.example` |
-| `devices/firmware/<device>/src/credentials.h` | Server endpoints, device token, WiFi networks. | `devices/firmware/<device>/src/credentials.h.example` |
+| `devices/firmware/<device>/src/device_auth_local.h` | Optional device-auth token only. | `devices/firmware/m5-stick/src/device_auth_local.h.example` |
+| `devices/firmware/<device>/src/server_config_local.h` | Optional secret-free fallback endpoints and TLS trust mapping. | `devices/firmware/m5-stick/src/server_config_local.h.example` |
 
 Never commit credentials or firmware binaries built with credentials embedded.
 

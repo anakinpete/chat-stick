@@ -24,7 +24,7 @@ Design spec for the M5StickS3 live voice assistant firmware. Focuses on concrete
   - Home shows a status bar (time left, battery % right). Items: Go back, New conversation, Resume chat, Device.
   - Resume Chat presents a paginated list of recent conversations; footer row includes "Go back".
 - WiFi management
-  - Runtime WiFi configuration via captive portal (AP mode). Currently WiFi credentials are compiled into firmware via credentials.h.
+  - Runtime WiFi configuration via captive portal (AP mode). WiFi credentials are stored in Preferences and are not compiled into firmware.
   - Paginated network list with exactly 5 SSIDs per page → 1 blank line → actions (Go back, Try again, Add WiFi network).
   - ● marks the connected SSID; ▸ marks the highlighted SSID; A selects; B cycles; B hold backs.
 - Reset device behavior

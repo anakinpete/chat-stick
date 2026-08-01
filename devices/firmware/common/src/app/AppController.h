@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "hal/DeviceCapabilities.h"
 #include "input/ButtonStateMachine.h"
+#include "power/PowerPolicy.h"
 #include "services/AudioService.h"
 #include "services/LiveSessionService.h"
 #include "power/PowerManager.h"
@@ -310,6 +311,12 @@ private:
   /// Whether cached activity is retained after a transport failure.
   bool _activityTransportStale = false;
 
+  /// Last effective Codex state used only for meaningful power activity.
+  CodexActivityState _powerActivityState = CodexActivityState::Unavailable;
+
+  /// Whether the power policy has observed an initial effective Codex state.
+  bool _powerActivityStateKnown = false;
+
   /// Whether the background activity request parsed a backend response.
   bool _activityFetchOk = false;
 
@@ -463,16 +470,13 @@ private:
   void retryAfterError();
 
   /// Shut the device down cleanly.
-  void performPowerOff(bool allowIdleDeepSleep = false);
+  void performPowerOff();
 
   /// Disconnect services and delegate final power-down to the board HAL.
   void shutdownHardware();
 
-  /// Whether a deep-sleep timer wake has elapsed past the idle shutdown window.
-  bool shouldPowerOffAfterIdleDeepSleep(DeepSleepWakeReason wakeReason) const;
-
-  /// Enter deep sleep until the next timer or idle shutdown deadline.
-  bool enterDeepSleepForTimerOrIdle(bool includeIdleShutdownDeadline);
+  /// Enter deep sleep until the next explicit local timer deadline.
+  bool enterDeepSleepForNextTimer();
 
   /// Clear transient tool text from the UI.
   void clearToolText();
@@ -582,6 +586,9 @@ private:
 
   /// Poll and react to power-management state changes.
   void processPower();
+
+  /// Resolve the privacy-safe Codex activity into its semantic UI state.
+  CodexActivityState effectiveCodexActivityState() const;
 
   /// Service captive-portal state transitions.
   void processCaptivePortal();

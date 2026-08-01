@@ -1,0 +1,13 @@
+#pragma once
+
+#include "Config.h"
+
+// Optional secret-free compiled fallback. Runtime setup-portal values remain
+// primary. Leave the default host empty when no fallback is required.
+constexpr const char *DEFAULT_BACKEND_HOST = "";
+constexpr int DEFAULT_BACKEND_PORT = 0;
+
+// Add real deployment endpoints only when a saved TLS host must match a
+// compiled trust anchor. Do not place WiFi credentials or tokens here.
+constexpr const ServerEndpoint *SERVER_ENDPOINTS = nullptr;
+constexpr int SERVER_ENDPOINT_COUNT = 0;

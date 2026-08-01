@@ -3,6 +3,8 @@
 server/.dev.vars
 server/wrangler.toml
 devices/firmware/*/src/credentials.h
+devices/firmware/*/src/device_auth_local.h
+devices/firmware/*/src/server_config_local.h
 
 # PlatformIO
 devices/firmware/*/.pio/

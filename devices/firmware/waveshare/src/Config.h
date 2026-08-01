@@ -3,10 +3,9 @@
 #include <Arduino.h>
 
 // ============= Server Configuration =============
-// The dev and prod server addresses are per-user and live in credentials.h
-// (gitignored). credentials.h defines: DEVELOPMENT_SERVER_ADDRESS,
-// DEVELOPMENT_SERVER_PORT, PRODUCTION_SERVER_ADDRESS, SERVER_ENDPOINTS[],
-// and SERVER_ENDPOINT_COUNT.
+// Deployment-independent endpoint types and trust anchors live here. Runtime
+// backend selection comes from SettingsStore; safe defaults live in
+// services/ServerConfig.h.
 /**
  * @brief TLS endpoint configuration for a chat server deployment.
  */
@@ -42,7 +41,7 @@ constexpr const char *SERVER_PATH = "/ws";
 
 // ============= WiFi Networks =============
 /**
- * @brief Built-in WiFi credential entry compiled from credentials.h.
+ * @brief Legacy WiFi credential value type retained for source compatibility.
  */
 struct WiFiNetwork {
   /// Network SSID.
@@ -55,9 +54,7 @@ struct WiFiNetwork {
   const char *label;
 };
 
-// WiFi credentials are in credentials.h (gitignored).
-// Copy credentials.h.example to credentials.h and fill in your networks.
-// credentials.h defines: WIFI_NETWORKS[] and WIFI_NETWORK_COUNT
+// WiFi credentials are provisioned at runtime and stored in Preferences.
 constexpr int WIFI_CONNECT_TIMEOUT_SEC = 10;
 constexpr bool WIFI_DISABLE_PERSISTENT_STORAGE = false;
 constexpr bool WIFI_DISABLE_SLEEP_DURING_CONNECT = false;

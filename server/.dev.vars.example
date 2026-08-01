@@ -2,8 +2,8 @@ GEMINI_API_KEY=your-gemini-api-key-here
 HISTORY_API_TOKEN=your-history-api-token-here
 
 # Optional but recommended for deployed devices/admin endpoints.
-# If DEVICE_AUTH_TOKEN is set on the worker, set the same value in
-# firmware/src/credentials.h before flashing or publishing OTA.
+# If DEVICE_AUTH_TOKEN is set on the worker, configure the same value in the
+# ignored firmware `device_auth_local.h` before flashing or publishing OTA.
 # ADMIN_API_TOKEN=your-admin-api-token-here
 # DEVICE_AUTH_TOKEN=your-device-auth-token-here
 

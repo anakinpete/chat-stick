@@ -1,8 +1,8 @@
 #include "SettingsStore.h"
 
 #include "Config.h"
+#include "ServerConfig.h"
 #include "WiFiService.h"
-#include "credentials.h"
 #include "state/ThemeManager.h"
 
 namespace {
@@ -39,10 +39,10 @@ void SettingsStore::init() {
   _externalSpeakerGain = kDefaultExternalGain;
   _voice = kDefaultVoice;
   _serverEndpointIndex = 0;
-  _wifiSsid = WIFI_NETWORK_COUNT > 0 ? WIFI_NETWORKS[0].ssid : "";
-  _wifiPassword = WIFI_NETWORK_COUNT > 0 ? WIFI_NETWORKS[0].password : "";
-  _backendHost = DEVELOPMENT_SERVER_ADDRESS;
-  _backendPort = DEVELOPMENT_SERVER_PORT;
+  _wifiSsid = "";
+  _wifiPassword = "";
+  _backendHost = DEFAULT_BACKEND_HOST;
+  _backendPort = DEFAULT_BACKEND_PORT;
   _activeTheme = ThemeManager::identifier(ThemeId::Plain);
   _hasSavedWifi = false;
   _hasSavedBackend = false;

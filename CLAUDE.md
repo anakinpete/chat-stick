@@ -91,7 +91,8 @@ Serial port is configured in `platformio.ini` (`upload_port`/`monitor_port`). Up
 All deployment-specific config is gitignored. Templates exist at:
 - `server/.dev.vars.example` → `server/.dev.vars` (GEMINI_API_KEY, HISTORY_API_TOKEN, optional ADMIN_API_TOKEN, DEVICE_AUTH_TOKEN, EMAIL_SENDER/EMAIL_RECIPIENT)
 - `server/wrangler.toml.example` → `server/wrangler.toml` (Cloudflare bindings — D1 database_id, optional `[[send_email]]` and `[[r2_buckets]]` blocks). The committed `wrangler.toml.example` is the canonical structure; do not edit `wrangler.toml` expecting forks to inherit it
-- `devices/firmware/<device>/src/credentials.h.example` → `devices/firmware/<device>/src/credentials.h` (server endpoints, optional device token, WiFi networks)
+- `devices/firmware/m5-stick/src/device_auth_local.h.example` → `device_auth_local.h` (optional device token only)
+- `devices/firmware/m5-stick/src/server_config_local.h.example` → `server_config_local.h` (optional secret-free fallback endpoints)
 
 ## Audio Format
 
@@ -111,7 +112,7 @@ All deployment-specific config is gitignored. Templates exist at:
 1. Run `./publish-ota-release.sh m5-stick` or `./publish-ota-release.sh waveshare`
 2. Devices running an older version pick up the new binary on next boot via `/firmware/check` → `/firmware/download`
 
-The worker auto-detects the highest `firmware-v<N>.bin` per device in R2; there's no separate version registry. Because `credentials.h` is compiled into the binary, **never commit or publish built `.bin` files** — `strings` will surface WiFi creds and the worker URL.
+The worker auto-detects the highest `firmware-v<N>.bin` per device in R2; there's no separate version registry. Do not publish deployment-specific `.bin` files: optional device-auth tokens and compiled fallback endpoints can be recovered from binaries. WiFi passwords are provisioned and stored at runtime.
 
 ## Display Layout
 
